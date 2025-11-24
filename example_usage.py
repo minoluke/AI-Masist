@@ -8,6 +8,15 @@ execute, and analyze a machine learning experiment from a research idea.
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+env_path = Path(__file__).parent.parent / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+    print(f"✓ Loaded environment variables from {env_path}")
+else:
+    print(f"⚠ .env file not found at {env_path}")
 
 from draft_processor import DraftProcessor
 

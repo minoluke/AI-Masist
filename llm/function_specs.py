@@ -140,3 +140,4 @@ plot_selection_spec = FunctionSpec(
         "required": ["selected_plots"],
     },
     description="Select the 10 most relevant plots for analysis",
+)

@@ -8,36 +8,30 @@ import os
 import json
 
 from dataclasses_json import DataClassJsonMixin
-from .interpreter import ExecutionResult
-from .utils.metric import MetricValue, WorstMetricValue
-from .utils.response import trim_long_string
-from .backend import FunctionSpec, query
+from ..executor.interpreter import ExecutionResult
+from .metric import MetricValue, WorstMetricValue
+from typing import List, Dict
 
 from rich import print
 
 import logging
 from pathlib import Path
 
+# Simplified helper functions for unitTest
+def trim_long_string(s: str, max_len: int = 1000) -> str:
+    """Trim long strings for display"""
+    if len(s) > max_len:
+        return s[:max_len] + "..."
+    return s
+
+def query(*args, **kwargs):
+    """Placeholder for query function - not used in basic unitTest"""
+    raise NotImplementedError("query function not implemented in simplified unitTest")
+
 logger = logging.getLogger(__name__)
 
-node_selection_spec = FunctionSpec(
-    name="select_best_implementation",
-    description="Select the best implementation based on comprehensive analysis",
-    json_schema={
-        "type": "object",
-        "properties": {
-            "selected_id": {
-                "type": "string",
-                "description": "ID of the selected best implementation",
-            },
-            "reasoning": {
-                "type": "string",
-                "description": "Detailed explanation of why this implementation was chosen",
-            },
-        },
-        "required": ["selected_id", "reasoning"],
-    },
-)
+# Commented out for simplified unitTest version
+# node_selection_spec = FunctionSpec(...)
 
 
 @dataclass(eq=False)

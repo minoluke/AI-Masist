@@ -15,6 +15,13 @@ from typing import Callable
 logger = logging.getLogger("ai-scientist")
 
 
+def wrap_code(code: str) -> str:
+    """Wrap code in markdown code block"""
+    if not code.strip().startswith("```"):
+        return f"```python\n{code}\n```"
+    return code
+
+
 @backoff.on_predicate(
     wait_gen=backoff.expo,
     max_value=60,
