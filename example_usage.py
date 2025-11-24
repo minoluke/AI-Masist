@@ -33,17 +33,17 @@ class SimpleConfig:
     class AgentConfig:
         @dataclass
         class CodeConfig:
-            model: str = "gpt-4o"
+            model: str = "gpt-4o-mini"
             temp: float = 0.7
 
         @dataclass
         class FeedbackConfig:
-            model: str = "gpt-4o"
+            model: str = "gpt-4o-mini"
             temp: float = 0.3
 
         @dataclass
         class VLMFeedbackConfig:
-            model: str = "gpt-4o"
+            model: str = "gpt-4o-mini"
             temp: float = 0.3
 
         code: CodeConfig = CodeConfig()
