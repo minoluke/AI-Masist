@@ -25,11 +25,12 @@ class CodeGenerator:
         """Generate a draft implementation (equivalent to _draft())"""
         prompt: Any = {
             "Introduction": (
-                "You are an AI researcher who is looking to publish a paper that will contribute significantly to the field."
-                "Your first task is to write a python code to implement a solid baseline based on your research idea provided below, "
-                "from data preparation to model training, as well as evaluation and visualization. "
-                "Focus on getting a simple but working implementation first, before any sophisticated improvements. "
-                "We will explore more advanced variations in later stages."
+                "あなたは MASist（社会科学系・LLMマルチエージェント実験＋論文自動生成プラットフォーム）の"
+                "シミュレーションエンジン開発を担うAI研究者です。"
+                "最初のタスクは、以下の Research idea（シミュレーション検討シート）に基づき、"
+                "Autogen を利用した LLM マルチエージェントシミュレーションを設計・実装し、"
+                "複数シナリオの実行・ログ収集・評価・簡易可視化まで行う堅牢なベースラインを構築することです。"
+                "まずは高度な最適化よりも、正しく動作する最小限のパイプライン構築を優先してください。"
             ),
             "Research idea": self.task_desc,
             "Memory": self.memory_summary if self.memory_summary else "",
@@ -38,12 +39,12 @@ class CodeGenerator:
         prompt["Instructions"] |= self._prompt_resp_fmt
         prompt["Instructions"] |= {
             "Experiment design sketch guideline": [
-                "This first experiment design should be relatively simple, without extensive hyper-parameter optimization.",
-                "Take the Memory section into consideration when proposing the design. ",
-                "The solution sketch should be 6-10 sentences. ",
-                "Don't suggest to do EDA.",
-                "Make sure to create synthetic data if needed.",
-                "",
+                "これは初期ベースライン設計であり、複雑なハイパーパラメータ調整は行わないこと。",
+                "Memory セクションの情報と一貫する設計にすること。",
+                "シミュレーション検討シート（Research idea）の内容を忠実に反映すること。",
+                "EDA（データ探索）は提案しないこと。",
+                "必要に応じて複数の合成シナリオ（異なる環境設定や役割構造）を作成してよい。",
+                "マルチエージェントフレームワークは必ず Autogen を使用すること。",
             ],
             "Evaluation Metric(s)": self.evaluation_metrics,
         }
@@ -68,121 +69,89 @@ class CodeGenerator:
         pkgs = [
             "numpy",
             "pandas",
+            "autogen",
+            "matplotlib",
+            "seaborn",
             "scikit-learn",
-            "statsmodels",
-            "xgboost",
-            "lightGBM",
             "torch",
-            "torchvision",
-            "torch-geometric",
-            "bayesian-optimization",
-            "timm",
-            "albumentations",
         ]
         random.shuffle(pkgs)
         pkg_str = ", ".join([f"`{p}`" for p in pkgs])
 
         env_prompt = {
-            "Installed Packages": f"Your solution can use any relevant machine learning packages such as: {pkg_str}. Feel free to use any other packages too (all packages are already installed!). For neural networks we suggest using PyTorch rather than TensorFlow."
+            "Installed Packages": (
+                f"以下パッケージ利用可：{pkg_str}。"
+                "マルチエージェントフレームワークは autogen を必ず使用すること。"
+                "その他、可視化・データ処理用ライブラリは必要に応じて利用可。"
+            )
         }
         return env_prompt
 
     @property
     def _prompt_impl_guideline(self):
-        impl_guideline = [
-            "CRITICAL GPU REQUIREMENTS - Your code MUST include ALL of these:",
-            "  - At the start of your code, add these lines to handle GPU/CPU:",
-            "    ```python",
-            "    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')",
-            "    print(f'Using device: {device}')",
-            "    ```",
-            "  - ALWAYS move models to device using the `.to(device)` method",
-            "  - ALWAYS move input tensors to device using the `.to(device)` method",
-            "  - ALWAYS move model related tensors to device using the `.to(device)` method",
-            "  - For optimizers, create them AFTER moving model to device",
-            "  - When using DataLoader, move batch tensors to device in training loop: `batch = {k: v.to(device) for k, v in batch.items() if isinstance(v, torch.Tensor)}`",
-            "CRITICAL MODEL INPUT GUIDELINES:",
-            "  - Always pay extra attention to the input to the model being properly normalized",
-            "  - This is extremely important because the input to the model's forward pass directly affects the output, and the loss function is computed based on the output",
-        ]
-        if hasattr(self.cfg.experiment, "num_syn_datasets"):
+        # デフォルト値を設定
+        num_syn_datasets = 2
+        if hasattr(self.cfg, "experiment") and hasattr(self.cfg.experiment, "num_syn_datasets"):
             num_syn_datasets = self.cfg.experiment.num_syn_datasets
-            if num_syn_datasets > 1:
-                impl_guideline.extend(
-                    [
-                        f"You MUST evaluate your solution on at least {num_syn_datasets} different synthetic datasets to ensure robustness:",
-                        "  - Use standard benchmark datasets when available",
-                        f"  - If using synthetic data, generate at least {num_syn_datasets} variants with different characteristics",
-                        "  - Report metrics separately for each dataset",
-                        "  - Compute and report the average metric across all datasets",
-                    ]
-                )
-        impl_guideline.extend(
-            [
-                "For generative modeling tasks, you must:",
-                "  - Generate a set of samples from your model",
-                "  - Compare these samples with ground truth data using appropriate visualizations",
-                "  - When saving plots, always use the 'working_dir' variable that will be defined at the start of the script",
-                "  - Make sure to give each figure a unique and appropriate name based on the dataset it represents, rather than reusing the same filename.",
-                "Important code structure requirements:",
-                "  - Do NOT put any execution code inside 'if __name__ == \"__main__\":' block",
-                "  - All code should be at the global scope or in functions that are called from the global scope",
-                "  - The script should execute immediately when run, without requiring any special entry point",
-                "The code should start with:",
-                "  import os",
-                "  working_dir = os.path.join(os.getcwd(), 'working')",
-                "  os.makedirs(working_dir, exist_ok=True)",
-                "The code should be a single-file python program that is self-contained and can be executed as-is.",
-                "No parts of the code should be skipped, don't terminate the code execution before finishing the script.",
-                "Your response should only contain a single code block.",
-                f"Be aware of the running time of the code, it should complete within {humanize.naturaldelta(self.cfg.exec.timeout)}.",
-                'You can also use the "./working" directory to store any temporary files that your code needs to create.',
-                "Data saving requirements:",
-                "- Save all plottable data (metrics, losses, predictions, etc.) as numpy arrays using np.save()",
-                "- Use the following naming convention for saved files:",
-                "  ```python",
-                "  # At the start of your code",
-                "  experiment_data = {",
-                "      'dataset_name_1': {",
-                "          'metrics': {'train': [], 'val': []},",
-                "          'losses': {'train': [], 'val': []},",
-                "          'predictions': [],",
-                "          'ground_truth': [],",
-                "          # Add other relevant data",
-                "      },",
-                "      # Add additional datasets as needed:",
-                "      'dataset_name_2': {",
-                "          'metrics': {'train': [], 'val': []},",
-                "          'losses': {'train': [], 'val': []},",
-                "          'predictions': [],",
-                "          'ground_truth': [],",
-                "          # Add other relevant data",
-                "      },",
-                "  }",
-                "  # During training/evaluation:",
-                "  experiment_data['dataset_name_1']['metrics']['train'].append(train_metric)",
-                "  ```",
-                "- Include timestamps or epochs with the saved metrics",
-                "- For large datasets, consider saving in chunks or using np.savez_compressed()",
-                "CRITICAL EVALUATION REQUIREMENTS - Your code MUST include ALL of these:",
-                "  1. Track and print validation loss at each epoch or at suitable intervals:",
-                "     ```python",
-                "     print(f'Epoch {{epoch}}: validation_loss = {{val_loss:.4f}}')",
-                "     ```",
-                "  2. Track and update ALL these additional metrics: "
-                + str(self.evaluation_metrics),
-                "  3. Update metrics at EACH epoch:",
-                "  4. Save ALL metrics at the end:",
-                "     ```python",
-                "     np.save(os.path.join(working_dir, 'experiment_data.npy'), experiment_data)",
-                "     ```",
-            ]
-        )
 
-        if self.cfg.agent.k_fold_validation > 1:
-            impl_guideline.append(
-                f"The evaluation should be based on {self.cfg.agent.k_fold_validation}-fold cross-validation but only if that's an appropriate evaluation for the task at hand."
-            )
+        impl_guideline = [
+            "【MASist シミュレーション要件】",
+            "  - Autogen によるエージェント定義・グループ対話・停止条件を用いた"
+            "    マルチエージェントシミュレーションパイプラインを構築すること。",
+            "  - エージェントのロール、内部状態、環境状態、終了条件を明示すること。",
+            "  - 同じシナリオを複数回試行（異なる乱数シード）できる構造にすること。",
+            f"  - 動作確認用に、複数のシナリオ（最低 {num_syn_datasets} 件）で実行し、"
+            "    シナリオ間比較を行うこと。",
+            "",
+            "【プロンプト/入力設計】",
+            "  - 検討シートの項目（背景、目的、研究質問、仮説、エージェント、環境、プロトコルなど）を"
+            "    そのまま LLM 入力として使える構造に整形すること。",
+            "",
+            "【experiment_data の構造（修正版：教師あり学習前提を撤廃）】",
+            "  experiment_data = {",
+            "      'scenario_name': {",
+            "          'runs': [",
+            "              {",
+            "                  'seed': 0,",
+            "                  'messages': [...],",
+            "                  'metrics': {...},",
+            "              },",
+            "          ],",
+            "          'aggregated_metrics': {...},",
+            "      },",
+            "  }",
+            "",
+            "【シミュレーションの記録】",
+            "  - 各 run（試行）で記録すべき情報：",
+            "        ・全メッセージログ（ターン順）",
+            "        ・途中の重要イベント（例：合意成立、衝突）",
+            "        ・run の評価指標（self.evaluation_metrics）",
+            "  - scenario ごとに aggregated_metrics を計算すること（平均・分散など）。",
+            "",
+            "【評価要件（train/val/loss を撤廃し MAS 向けに修正済み）】",
+            "  - 各 run の終了後に主要メトリクスを print：",
+            "       print(f'Run {run_id} (seed={seed}): metrics = {metrics}')",
+            "  - 各 scenario 終了後に aggregated_metrics を print。",
+            "  - ALL metrics を追跡し、実行後に保存する。",
+            "",
+            "【保存要件（ログ・メトリクス）】",
+            "  - np.save() または np.savez_compressed() で experiment_data 全体を保存。",
+            "  - ファイル名にはシナリオ名やタイムスタンプを含めること。",
+            "  - 保存先は working_dir とする。",
+            "",
+            "【コード構造要件】",
+            "  - コードは以下の3行から始めること：",
+            "       import os",
+            "       working_dir = os.path.join(os.getcwd(), 'working')",
+            "       os.makedirs(working_dir, exist_ok=True)",
+            "  - `if __name__ == \"__main__\":` を使用しないこと。",
+            "  - 外部設定ファイルに依存せず、1ファイルで完結すること。",
+            f"  - 実行時間は {humanize.naturaldelta(self.cfg.exec.timeout)} 内で収まるよう、"
+            "    試行数・最大ターン数を適切に設定すること。",
+            "",
+            "【Autogen 依存について】",
+            "  - Autogen および LLM API キーが環境に存在する前提で、コードは単一ファイルとして成立すべき。",
+        ]
 
         return {"Implementation guideline": impl_guideline}
 
@@ -190,10 +159,11 @@ class CodeGenerator:
     def _prompt_resp_fmt(self):
         return {
             "Response format": (
-                "Your response should be a brief outline/sketch of your proposed solution in natural language (7-10 sentences), "
-                "followed by a single markdown code block (using the format ```python ... ```) which implements this solution and prints out the evaluation metric(s) if applicable. "
-                "There should be no additional headings or text in your response. Just natural language text followed by a newline and then the markdown code block. "
-                "Make sure to write concise code."
+                "最初に、提案するシミュレーション設計・実装方針を7〜10文で簡潔に説明し、"
+                "その後に Autogen ベースのシミュレーション実装を含む単一の Python コードブロック"
+                "（ ```python ... ``` ）を提示してください。"
+                "コードは一つのファイルとして完結し、実行可能であること。"
+                "自然言語の説明 → 改行 → コードブロックの順で、余分な見出しは不要です。"
             )
         }
 

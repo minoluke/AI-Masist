@@ -78,8 +78,7 @@ class MetricsExtractor:
         parse_metrics_prompt = {
             "Introduction": (
                 "You are an AI researcher analyzing experimental results stored in numpy files. "
-                "Write code to load and analyze the metrics from experiment_data.npy. "
-                "For multi-agent simulations, focus on scenario-level aggregated metrics."
+                "Write code to load and analyze the metrics from experiment_data.npy."
             ),
             "Context": [
                 "Original Code: " + node.code,
@@ -87,12 +86,11 @@ class MetricsExtractor:
             "Instructions": [
                 "0. Make sure to get the working directory from os.path.join(os.getcwd(), 'working')",
                 "1. Load the experiment_data.npy file, which is located in the working directory",
-                "2. Extract metrics for each scenario/dataset. Make sure to refer to the original code to understand the structure of the data.",
-                "3. For multi-agent simulations, focus on aggregated_metrics across runs rather than individual run metrics",
-                "4. Always print the name of the scenario/dataset before printing the metrics",
-                "5. Always print the name of the metric before printing the value by specifying the metric name clearly. Use descriptive labels such as 'consensus rate,' 'average turns,' 'convergence time,' etc.",
-                "6. You only need to print the aggregated or final value for each metric for each scenario",
-                "7. DO NOT CREATE ANY PLOTS",
+                "2. Extract metrics for each dataset. Make sure to refer to the original code to understand the structure of the data.",
+                "3. Always print the name of the dataset before printing the metrics",
+                "4. Always print the name of the metric before printing the value by specifying the metric name clearly. Avoid vague terms like 'train,' 'val,' or 'test.' Instead, use precise labels such as 'train accuracy,' 'validation loss,' or 'test F1 score,' etc.",
+                "5. You only need to print the best or final value for each metric for each dataset",
+                "6. DO NOT CREATE ANY PLOTS",
                 "Important code structure requirements:",
                 "  - Do NOT put any execution code inside 'if __name__ == \"__main__\":' block. Do not use 'if __name__ == \"__main__\":' at all.",
                 "  - All code should be at the global scope or in functions that are called from the global scope",

@@ -65,21 +65,44 @@ def main():
     """
     Main example: Process a simple research idea through the draft pipeline
     """
-    # Define research task
+    # MASist Multi-Agent Simulation Example
     task_desc = """
-    Implement a neural network classifier for the MNIST dataset.
-    Use a simple feedforward network with 2 hidden layers.
-    Train for 10 epochs and evaluate on test set.
-    Track training and validation accuracy and loss.
+    # シミュレーション検討シート
+
+    ## 背景
+    社会的ジレンマ状況における協力行動の創発を研究する。
+
+    ## 研究質問
+    エージェント間のコミュニケーションが協力行動にどのような影響を与えるか？
+
+    ## 仮説
+    エージェント間のコミュニケーション頻度が高いほど、協力率が向上する。
+
+    ## エージェント設計
+    - 2種類のエージェント：協力的エージェントと利己的エージェント
+    - 各エージェントはコミュニケーションを通じて戦略を調整
+    - LLMを使用して意思決定をシミュレート
+
+    ## 環境設定
+    - 囚人のジレンマゲームを3ラウンド実施
+    - 各ラウンドでエージェントは「協力」または「裏切り」を選択
+
+    ## シナリオ
+    1. 高コミュニケーション頻度シナリオ（各ラウンド前に対話）
+    2. 低コミュニケーション頻度シナリオ（最初のみ対話）
+
+    ## 評価指標
+    - 協力率（全選択における協力の割合）
+    - 合意達成率（エージェント間で同じ選択をした割合）
+    - ターン数（シミュレーション完了までのターン数）
     """
 
-    # Define evaluation metrics
+    # Define evaluation metrics for MAS
     evaluation_metrics = [
-        "training accuracy",
-        "validation accuracy",
-        "test accuracy",
-        "training loss",
-        "validation loss",
+        "cooperation_rate",
+        "consensus_rate",
+        "average_turns",
+        "convergence_time",
     ]
 
     # Create configuration

@@ -76,17 +76,16 @@ class PlotGenerator:
             "  working_dir = os.path.join(os.getcwd(), 'working')",
             "Create standard visualizations of experiment results",
             "Save all plots to working_dir",
-            "For multi-agent simulations, visualize scenario comparisons, metric distributions, and temporal patterns",
-            "Include time-series plots (e.g., turns, message counts) if available",
+            "Include training/validation curves if available",
             "ONLY plot data that exists in experiment_data.npy - DO NOT make up or simulate any values",
             "Use basic matplotlib without custom styles",
             "Each plot should be in a separate try-except block",
             "Always close figures after saving",
-            "Always include a title for each plot, and be sure to use clear subtitles while also specifying the scenario being visualized.",
-            "Make sure to use descriptive names for figures when saving e.g. always include the scenario name and the type of plot in the name",
-            "When there are many similar figures to plot (e.g. multiple runs), make sure to plot only aggregated results or at most 5 representative samples.",
+            "Always include a title for each plot, and be sure to use clear subtitles—such as 'Left: Ground Truth, Right: Generated Samples'—while also specifying the type of dataset being used.",
+            "Make sure to use descriptive names for figures when saving e.g. always include the dataset name and the type of plot in the name",
+            "When there are many similar figures to plot (e.g. generated samples at each epoch), make sure to plot only at a suitable interval of epochs so that you only plot at most 5 figures.",
             "Use the following experiment code to infer the data to plot: " + node.code,
-            "Example to extract data from experiment_data: experiment_data['scenario_name']['aggregated_metrics'] or experiment_data['scenario_name']['runs'][0]['metrics']",
+            "Example to extract data from experiment_data: experiment_data['dataset_name_1']['metrics']['train']",
         ]
 
         prompt_guideline += [
