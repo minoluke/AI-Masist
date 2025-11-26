@@ -81,13 +81,13 @@ def process_node_wrapper(
             print("Generating draft node")
             child_node = code_generator.generate()
         elif parent_node.is_buggy:
-            # Debug node - TODO: implement in Week 2
-            print(f"Debug node requested for {parent_node.id}, but not yet implemented")
-            raise NotImplementedError("Debug nodes will be implemented in Week 2 (Task 4)")
+            # Debug node
+            print(f"Generating debug node for {parent_node.id}")
+            child_node = code_generator.generate_debug(parent_node)
         else:
-            # Improve node - TODO: implement in Week 2
-            print(f"Improve node requested for {parent_node.id}, but not yet implemented")
-            raise NotImplementedError("Improve nodes will be implemented in Week 2 (Task 4)")
+            # Improve node
+            print(f"Generating improve node for {parent_node.id}")
+            child_node = code_generator.generate_improve(parent_node)
 
         # Set parent if provided
         if parent_node:

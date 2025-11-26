@@ -9,7 +9,7 @@ import humanize
 
 from ..core.node import Node
 from ..llm.backend import query
-from ..utils.response import extract_code, extract_text_up_to_code
+from ..utils.response import extract_code, extract_text_up_to_code, wrap_code
 
 
 class CodeGenerator:
@@ -212,3 +212,137 @@ class CodeGenerator:
             )
         print("Final plan + code extraction attempt failed, giving up...")
         return "", completion_text  # type: ignore
+
+    # ========== Week 2: Debug/Improve メソッド ==========
+
+    def generate_debug(self, parent_node: Node) -> Node:
+        """
+        Generate a bugfix implementation based on parent node's error information.
+        Equivalent to MinimalAgent._debug() in AI-Scientist-v2.
+        """
+        prompt: Any = {
+            "Introduction": (
+                "あなたは MASist（LLMマルチエージェント実験プラットフォーム）のシミュレーションエンジン開発を担うAI研究者です。"
+                "前回のシミュレーションコードにバグがあったため、以下の情報をもとにバグを修正してください。"
+                "応答は、まず自然言語で修正方針を簡潔に説明し、その後に修正済みの完全なコードを提示してください。"
+            ),
+            "Research idea": self.task_desc,
+            "Previous (buggy) implementation": wrap_code(parent_node.code),
+            "Execution output": wrap_code(parent_node.term_out or "", lang=""),
+            "Instructions": {},
+        }
+
+        # VLMフィードバックがあれば追加
+        if parent_node.vlm_feedback_summary:
+            prompt["Feedback based on generated plots"] = parent_node.vlm_feedback_summary
+
+        # 実行時間フィードバックがあれば追加
+        if hasattr(parent_node, 'exec_time_feedback') and parent_node.exec_time_feedback:
+            prompt["Feedback about execution time"] = parent_node.exec_time_feedback
+
+        prompt["Instructions"] |= self._prompt_debug_resp_fmt
+        prompt["Instructions"] |= {
+            "Bugfix guideline": [
+                "前回の実装のバグを特定し、修正方針を3〜5文で簡潔に説明すること。",
+                "修正後のコードは完全で実行可能であること（省略不可）。",
+                "EDA（データ探索）は提案しないこと。",
+                "Autogen を使ったマルチエージェントシミュレーションの構造を維持すること。",
+            ],
+        }
+        prompt["Instructions"] |= self._prompt_impl_guideline
+        prompt["Instructions"] |= self._prompt_environment
+
+        # AG2リファレンスドキュメントを追加
+        if self.ag2_reference:
+            prompt["AG2 API Reference"] = self.ag2_reference
+
+        print("[yellow]--------------------------------[/yellow]")
+        print(f"[yellow]CodeGenerator: Debugging node {parent_node.id}[/yellow]")
+        print("[yellow]--------------------------------[/yellow]")
+
+        print("CodeGenerator: Getting debug plan and code")
+        plan, code = self.plan_and_code_query(prompt)
+        print("CodeGenerator: Debug complete")
+
+        child_node = Node(plan=plan, code=code)
+        child_node.parent = parent_node
+        child_node.debug_depth = parent_node.debug_depth + 1
+        return child_node
+
+    def generate_improve(self, parent_node: Node) -> Node:
+        """
+        Generate an improved implementation based on parent node's results.
+        Equivalent to MinimalAgent._improve() in AI-Scientist-v2.
+        """
+        prompt: Any = {
+            "Introduction": (
+                "あなたは MASist（LLMマルチエージェント実験プラットフォーム）のシミュレーションエンジン開発を担うAI研究者です。"
+                "前回のシミュレーションは正常に動作しましたが、さらなる改善が可能です。"
+                "以下の情報をもとに、シミュレーションの品質・精度・効率を向上させてください。"
+            ),
+            "Research idea": self.task_desc,
+            "Memory": self.memory_summary if self.memory_summary else "",
+            "Previous solution": {
+                "Code": wrap_code(parent_node.code),
+                "Plan": parent_node.plan,
+            },
+            "Instructions": {},
+        }
+
+        # メトリクス情報があれば追加
+        if parent_node.metric:
+            prompt["Previous metrics"] = str(parent_node.metric)
+
+        # VLMフィードバックがあれば追加
+        if parent_node.vlm_feedback_summary:
+            prompt["Feedback based on generated plots"] = parent_node.vlm_feedback_summary
+
+        # 実行時間フィードバックがあれば追加
+        if hasattr(parent_node, 'exec_time_feedback') and parent_node.exec_time_feedback:
+            prompt["Feedback about execution time"] = parent_node.exec_time_feedback
+
+        # 分析結果があれば追加
+        if parent_node.analysis:
+            prompt["Previous analysis"] = parent_node.analysis
+
+        prompt["Instructions"] |= self._prompt_resp_fmt
+        prompt["Instructions"] |= {
+            "Improvement guideline": [
+                "前回の実装を改善する方針を7〜10文で説明すること。",
+                "改善の観点：メトリクスの向上、シミュレーションの安定性、コードの効率性など。",
+                "改善後のコードは完全で実行可能であること（省略不可）。",
+                "Autogen を使ったマルチエージェントシミュレーションの構造を維持すること。",
+                "過度な複雑化は避け、段階的な改善を心がけること。",
+            ],
+            "Evaluation Metric(s)": self.evaluation_metrics,
+        }
+        prompt["Instructions"] |= self._prompt_impl_guideline
+        prompt["Instructions"] |= self._prompt_environment
+
+        # AG2リファレンスドキュメントを追加
+        if self.ag2_reference:
+            prompt["AG2 API Reference"] = self.ag2_reference
+
+        print("[green]--------------------------------[/green]")
+        print(f"[green]CodeGenerator: Improving node {parent_node.id}[/green]")
+        print("[green]--------------------------------[/green]")
+
+        print("CodeGenerator: Getting improvement plan and code")
+        plan, code = self.plan_and_code_query(prompt)
+        print("CodeGenerator: Improvement complete")
+
+        child_node = Node(plan=plan, code=code)
+        child_node.parent = parent_node
+        return child_node
+
+    @property
+    def _prompt_debug_resp_fmt(self):
+        """Response format for debug prompts"""
+        return {
+            "Response format": (
+                "まず、前回の実装のバグと修正方針を3〜5文で簡潔に説明してください。"
+                "その後に、修正済みの完全な Python コードブロック（ ```python ... ``` ）を提示してください。"
+                "コードは完全で実行可能であること。省略は不可です。"
+                "自然言語の説明 → 改行 → コードブロックの順で、余分な見出しは不要です。"
+            )
+        }
