@@ -70,11 +70,6 @@ class CodeGenerator:
         if self.cfg.agent.data_preview:
             prompt["Data Overview"] = self.data_preview
 
-        print("[cyan]--------------------------------[/cyan]")
-        print("[cyan]self.task_desc[/cyan]")
-        print("[cyan]" + self.task_desc + "[/cyan]")
-        print("[cyan]--------------------------------[/cyan]")
-
         print("CodeGenerator: Getting plan and code")
         plan, code = self.plan_and_code_query(prompt)
         print("CodeGenerator: Draft complete")
@@ -89,7 +84,7 @@ class CodeGenerator:
             "matplotlib",
             "seaborn",
             "scikit-learn",
-            "torch",
+            "time"
         ]
         random.shuffle(pkgs)
         pkg_str = ", ".join([f"`{p}`" for p in pkgs])
@@ -264,10 +259,7 @@ class CodeGenerator:
         plan, code = self.plan_and_code_query(prompt)
         print("CodeGenerator: Debug complete")
 
-        child_node = Node(plan=plan, code=code)
-        child_node.parent = parent_node
-        child_node.debug_depth = parent_node.debug_depth + 1
-        return child_node
+        return Node(plan=plan, code=code, parent=parent_node)
 
     def generate_improve(self, parent_node: Node) -> Node:
         """
@@ -331,9 +323,7 @@ class CodeGenerator:
         plan, code = self.plan_and_code_query(prompt)
         print("CodeGenerator: Improvement complete")
 
-        child_node = Node(plan=plan, code=code)
-        child_node.parent = parent_node
-        return child_node
+        return Node(plan=plan, code=code, parent=parent_node)
 
     @property
     def _prompt_debug_resp_fmt(self):

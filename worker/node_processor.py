@@ -99,19 +99,19 @@ def process_node_wrapper(
         child_node.absorb_exec_result(exec_result)
         process_interpreter.cleanup_session()
 
-        # ========== Phase 4: Result Evaluation ==========
-        print("Phase 4: Result Evaluation")
+        # ========== Phase 3: Result Evaluation ==========
+        print("Phase 3: Result Evaluation")
         evaluator = ResultEvaluator(task_desc, cfg)
         evaluator.evaluate(child_node, exec_result, working_dir)
 
-        # ========== Phase 3: Metrics Extraction ==========
-        print("Phase 3: Metrics Extraction")
+        # ========== Phase 4: Metrics Extraction ==========
+        print("Phase 4: Metrics Extraction")
         metrics_extractor = MetricsExtractor(cfg, process_interpreter)
 
         # Check for saved data files
-        data_files = [f for f in os.listdir(working_dir) if f.endswith(".npy")]
+        data_files = [f for f in os.listdir(working_dir) if f.endswith(".npy") or f.endswith(".npz")]
         if not data_files:
-            logger.warning("No .npy files found. Setting metric to WorstMetricValue")
+            logger.warning("No .npy/.npz files found. Setting metric to WorstMetricValue")
             child_node.metric = WorstMetricValue()
             child_node.is_buggy = True
         else:

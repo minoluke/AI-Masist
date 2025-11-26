@@ -331,7 +331,7 @@ class VLMFeedbackConfig:
 
 @dataclass
 class ExecConfig:
-    timeout: int = 300  # 5 minutes
+    timeout: int = 120  # 2 minutes
     num_gpus: int = 0
     format_tb_ipython: bool = True
     agent_file_name: str = "agent.py"
@@ -426,6 +426,35 @@ def test_parallel_agent_single_step():
             print(f"  - Draft nodes: {len(journal.draft_nodes)}")
             print(f"  - Good nodes: {len(journal.good_nodes)}")
             print(f"  - Buggy nodes: {len(journal.buggy_nodes)}")
+
+            # ========== DEBUG: working/ ディレクトリの状態確認 ==========
+            print(f"\n[DEBUG] Checking workspace directories...")
+            workspace_base = Path(config.workspace_dir)
+            for proc_dir in sorted(workspace_base.glob("process_*")):
+                print(f"\n  {proc_dir.name}/")
+                for f in proc_dir.iterdir():
+                    if f.is_file():
+                        print(f"    FILE: {f.name} ({f.stat().st_size} bytes)")
+                    elif f.is_dir():
+                        print(f"    DIR:  {f.name}/")
+                        contents = list(f.iterdir())
+                        if contents:
+                            for sub in contents:
+                                size = sub.stat().st_size if sub.is_file() else "dir"
+                                print(f"      - {sub.name} ({size} bytes)")
+                        else:
+                            print(f"      (empty)")
+
+            # ========== DEBUG: ノードの実行結果確認 ==========
+            print(f"\n[DEBUG] Checking node execution results...")
+            for node in journal.nodes:
+                print(f"\n  Node {node.id}:")
+                print(f"    is_buggy: {node.is_buggy}")
+                print(f"    exc_type: {node.exc_type}")
+                if node.term_out:
+                    print(f"    term_out (last 5 lines):")
+                    for line in node.term_out[-5:]:
+                        print(f"      {line[:100]}")
 
             # Should have created num_workers nodes
             assert len(journal) == agent.num_workers, \
@@ -655,6 +684,74 @@ def test_parallel_agent_run():
         return False
 
 
+def test_parallel_agent_full_4workers():
+    """Test ParallelAgent with 4 workers, multiple steps - production-like test"""
+    print("\n" + "=" * 80)
+    print("Test 6: ParallelAgent Full Run (4 workers, max 3 steps)")
+    print("=" * 80)
+
+    config = TestConfig()
+    config.agent.num_workers = 4
+    config.agent.search.num_drafts = 4
+
+    journal = Journal()
+    os.makedirs(config.workspace_dir, exist_ok=True)
+
+    try:
+        with ParallelAgent(
+            task_desc=SIMPLE_TASK_DESC,
+            cfg=config,
+            journal=journal,
+            evaluation_metrics=SAMPLE_METRICS,
+        ) as agent:
+            print(f"\n[TEST] Running agent with {agent.num_workers} workers (max 3 steps)...")
+
+            # Run with max 3 steps
+            success = agent.run(max_steps=3)
+
+            # Verify results
+            print(f"\n[TEST] Run completed. Success: {success}")
+            print(f"  - Total nodes: {len(journal)}")
+            print(f"  - Draft nodes: {len(journal.draft_nodes)}")
+            print(f"  - Good nodes: {len(journal.good_nodes)}")
+            print(f"  - Buggy nodes: {len(journal.buggy_nodes)}")
+
+            # ========== DEBUG: working/ ディレクトリの状態確認 ==========
+            print(f"\n[DEBUG] Checking workspace directories...")
+            workspace_base = Path(config.workspace_dir)
+            for proc_dir in sorted(workspace_base.glob("process_*")):
+                print(f"\n  {proc_dir.name}/")
+                for f in proc_dir.iterdir():
+                    if f.is_file():
+                        print(f"    FILE: {f.name} ({f.stat().st_size} bytes)")
+                    elif f.is_dir():
+                        print(f"    DIR:  {f.name}/")
+                        contents = list(f.iterdir())
+                        if contents:
+                            for sub in contents:
+                                size = sub.stat().st_size if sub.is_file() else "dir"
+                                print(f"      - {sub.name} ({size} bytes)")
+                        else:
+                            print(f"      (empty)")
+
+            # Should have at least 4 nodes (from first step)
+            assert len(journal) >= 4, f"Expected at least 4 nodes, got {len(journal)}"
+
+            if journal.good_nodes:
+                best_node = journal.get_best_node(only_good=True)
+                print(f"\n[TEST] Best node: {best_node.id}")
+                print(f"  - Metric: {best_node.metric}")
+
+            print("\n✅ Test 6 PASSED")
+            return True
+
+    except Exception as e:
+        print(f"\n❌ Test 6 FAILED: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def main():
     """Run all tests"""
     print("\n" + "=" * 80)
@@ -665,19 +762,38 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--quick", action="store_true", help="Run quick tests only (no API calls)")
     parser.add_argument("--full", action="store_true", help="Run all tests including slow ones")
+    parser.add_argument("--test", type=int, choices=[1, 2, 3, 4, 5, 6], help="Run specific test by number")
     args = parser.parse_args()
+
+    # テスト関数のマッピング
+    test_map = {
+        1: ("Init", test_parallel_agent_init),
+        2: ("Single Step (2 workers)", test_parallel_agent_single_step),
+        3: ("4 Workers Parallel", test_parallel_agent_4_workers),
+        4: ("Best-First Logic", test_select_parallel_nodes_logic),
+        5: ("Full Run (2 workers)", test_parallel_agent_run),
+        6: ("Full Run (4 workers)", test_parallel_agent_full_4workers),
+    }
 
     results = []
 
-    # Test 1: Initialization (always run)
-    results.append(("Init", test_parallel_agent_init()))
-
-    # Test 4: Best-First search logic (no API calls)
-    results.append(("Best-First Logic", test_select_parallel_nodes_logic()))
-
-    if args.quick:
+    # 特定のテストのみ実行
+    if args.test:
+        name, func = test_map[args.test]
+        results.append((name, func()))
+    elif args.quick:
+        # Test 1: Initialization (always run)
+        results.append(("Init", test_parallel_agent_init()))
+        # Test 4: Best-First search logic (no API calls)
+        results.append(("Best-First Logic", test_select_parallel_nodes_logic()))
         print("\n[Quick mode] Skipping API-dependent tests")
     else:
+        # Test 1: Initialization (always run)
+        results.append(("Init", test_parallel_agent_init()))
+
+        # Test 4: Best-First search logic (no API calls)
+        results.append(("Best-First Logic", test_select_parallel_nodes_logic()))
+
         # Test 2: Single step (2 workers)
         results.append(("Single Step (2 workers)", test_parallel_agent_single_step()))
 
