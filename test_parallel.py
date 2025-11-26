@@ -298,10 +298,11 @@ T = 22
 """
 
 SAMPLE_METRICS = [
-    "agreement_rate",
-    "rounds_to_agreement",
+    "threshold_achievement_rate",
+    "average_contribution",
+    "excess_contribution",
+    "rule_compliance_rate",
 ]
-
 
 @dataclass
 class SearchConfig:
@@ -356,7 +357,7 @@ class ExperimentConfig:
 @dataclass
 class TestConfig:
     """Configuration for parallel agent testing"""
-    workspace_dir: str = "/Users/idenominoru/Desktop/tmp/workspaces/test_parallel"
+    workspace_dir: str = "/Users/idenominoru/Desktop/tmp/unitTest/workspaces/test_parallel"
     exec: ExecConfig = field(default_factory=ExecConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     experiment: ExperimentConfig = field(default_factory=ExperimentConfig)
@@ -687,7 +688,7 @@ def test_parallel_agent_run():
 def test_parallel_agent_full_4workers():
     """Test ParallelAgent with 4 workers, multiple steps - production-like test"""
     print("\n" + "=" * 80)
-    print("Test 6: ParallelAgent Full Run (4 workers, max 3 steps)")
+    print("Test 6: ParallelAgent Full Run (4 workers, max 20 steps)")
     print("=" * 80)
 
     config = TestConfig()
@@ -704,10 +705,10 @@ def test_parallel_agent_full_4workers():
             journal=journal,
             evaluation_metrics=SAMPLE_METRICS,
         ) as agent:
-            print(f"\n[TEST] Running agent with {agent.num_workers} workers (max 3 steps)...")
+            print(f"\n[TEST] Running agent with {agent.num_workers} workers (max 20 steps)...")
 
-            # Run with max 3 steps
-            success = agent.run(max_steps=3)
+            # Run with max 20 steps (same as AI-Scientist-v2 stage1)
+            success = agent.run(max_steps=20)
 
             # Verify results
             print(f"\n[TEST] Run completed. Success: {success}")

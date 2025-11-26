@@ -84,7 +84,6 @@ class CodeGenerator:
             "matplotlib",
             "seaborn",
             "scikit-learn",
-            "time"
         ]
         random.shuffle(pkgs)
         pkg_str = ", ".join([f"`{p}`" for p in pkgs])
@@ -148,10 +147,10 @@ class CodeGenerator:
             "【保存要件（ログ・メトリクス）※必須※】",
             "  - **重要**: 必ず np.savez_compressed() で experiment_data 全体を保存すること。",
             "  - **JSON形式での保存は禁止**。必ず .npz 形式を使用すること。",
+            "  - **ファイル名は必ず 'experiment_data.npz' とすること（タイムスタンプやシナリオ名を含めない）**",
+            "  - **シナリオごとに別ファイルを作成しないこと。全シナリオを1つの辞書にまとめて保存する**",
             "  - 保存例:",
-            "       timestamp = time.strftime('%Y%m%d_%H%M%S')",
-            "       np.savez_compressed(f'{working_dir}/experiment_data_{timestamp}.npz', experiment_data=np.array(experiment_data, dtype=object))",
-            "  - ファイル名にはタイムスタンプを含めること。",
+            "       np.savez_compressed(f'{working_dir}/experiment_data.npz', experiment_data=np.array(experiment_data, dtype=object))",
             "  - 保存先は working_dir とする。",
             "",
             "【コード構造要件】",

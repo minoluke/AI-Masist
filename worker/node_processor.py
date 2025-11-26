@@ -6,7 +6,7 @@ import os
 import logging
 import multiprocessing
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 logger = logging.getLogger(__name__)
 
