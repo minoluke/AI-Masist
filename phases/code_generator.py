@@ -2,6 +2,7 @@
 Code Generator for Draft Phase
 Extracts and adapts code from parallel_agent.py MinimalAgent class
 """
+import os
 import random
 from typing import Any, Tuple
 import humanize
@@ -20,6 +21,17 @@ class CodeGenerator:
         self.cfg = cfg
         self.memory_summary = memory_summary
         self.data_preview = None
+        self.ag2_reference = self._load_ag2_reference()
+
+    def _load_ag2_reference(self) -> str:
+        """Load AG2 quick reference document"""
+        doc_path = os.path.join(os.path.dirname(__file__), "..", "docs", "AG2_QUICK_REFERENCE.md")
+        try:
+            with open(doc_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except FileNotFoundError:
+            print(f"Warning: AG2 reference document not found at {doc_path}")
+            return ""
 
     def generate(self) -> Node:
         """Generate a draft implementation (equivalent to _draft())"""
@@ -50,6 +62,10 @@ class CodeGenerator:
         }
         prompt["Instructions"] |= self._prompt_impl_guideline
         prompt["Instructions"] |= self._prompt_environment
+
+        # AG2リファレンスドキュメントを追加
+        if self.ag2_reference:
+            prompt["AG2 API Reference"] = self.ag2_reference
 
         if self.cfg.agent.data_preview:
             prompt["Data Overview"] = self.data_preview
@@ -134,9 +150,13 @@ class CodeGenerator:
             "  - 各 scenario 終了後に aggregated_metrics を print。",
             "  - ALL metrics を追跡し、実行後に保存する。",
             "",
-            "【保存要件（ログ・メトリクス）】",
-            "  - np.save() または np.savez_compressed() で experiment_data 全体を保存。",
-            "  - ファイル名にはシナリオ名やタイムスタンプを含めること。",
+            "【保存要件（ログ・メトリクス）※必須※】",
+            "  - **重要**: 必ず np.savez_compressed() で experiment_data 全体を保存すること。",
+            "  - **JSON形式での保存は禁止**。必ず .npz 形式を使用すること。",
+            "  - 保存例:",
+            "       timestamp = time.strftime('%Y%m%d_%H%M%S')",
+            "       np.savez_compressed(f'{working_dir}/experiment_data_{timestamp}.npz', experiment_data=np.array(experiment_data, dtype=object))",
+            "  - ファイル名にはタイムスタンプを含めること。",
             "  - 保存先は working_dir とする。",
             "",
             "【コード構造要件】",
@@ -144,7 +164,8 @@ class CodeGenerator:
             "       import os",
             "       working_dir = os.path.join(os.getcwd(), 'working')",
             "       os.makedirs(working_dir, exist_ok=True)",
-            "  - `if __name__ == \"__main__\":` を使用しないこと。",
+            "  - **重要**: `if __name__ == \"__main__\":` ブロックは絶対に使用しないこと。",
+            "  - すべての実行コードはグローバルスコープに直接記述すること（関数定義の外）。",
             "  - 外部設定ファイルに依存せず、1ファイルで完結すること。",
             f"  - 実行時間は {humanize.naturaldelta(self.cfg.exec.timeout)} 内で収まるよう、"
             "    試行数・最大ターン数を適切に設定すること。",

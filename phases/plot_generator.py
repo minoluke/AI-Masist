@@ -67,18 +67,20 @@ class PlotGenerator:
         """Generate code for plotting experiment results using LLM"""
         prompt_guideline = [
             "AVAILABLE DATA: ",
-            "Experiment Data: experiment_data.npy",
+            "Data files (.npy, .npz, .csv) are located in the working directory",
+            "You must dynamically discover and load these files - do NOT hardcode filenames",
             "REQUIREMENTS: ",
             "The code should start with:",
             "  import matplotlib.pyplot as plt",
             "  import numpy as np",
             "  import os",
             "  working_dir = os.path.join(os.getcwd(), 'working')",
+            "First, find all data files in working_dir using os.listdir()",
             "Create standard visualizations of experiment results",
             "Save all plots to working_dir",
             "For multi-agent simulations, visualize scenario comparisons, metric distributions, and temporal patterns",
             "Include time-series plots (e.g., turns, message counts) if available",
-            "ONLY plot data that exists in experiment_data.npy - DO NOT make up or simulate any values",
+            "ONLY plot data that exists in the discovered files - DO NOT make up or simulate any values",
             "Use basic matplotlib without custom styles",
             "Each plot should be in a separate try-except block",
             "Always close figures after saving",
@@ -86,36 +88,51 @@ class PlotGenerator:
             "Make sure to use descriptive names for figures when saving e.g. always include the scenario name and the type of plot in the name",
             "When there are many similar figures to plot (e.g. multiple runs), make sure to plot only aggregated results or at most 5 representative samples.",
             "Use the following experiment code to infer the data to plot: " + node.code,
-            "Example to extract data from experiment_data: experiment_data['scenario_name']['aggregated_metrics'] or experiment_data['scenario_name']['runs'][0]['metrics']",
         ]
 
         prompt_guideline += [
             "Example data loading and plot saving code: ",
             """
-                try:
-                    experiment_data = np.load(os.path.join(working_dir, 'experiment_data.npy'), allow_pickle=True).item()
-                except Exception as e:
-                    print(f'Error loading experiment data: {e}')
+                # Discover and load data files
+                for filename in os.listdir(working_dir):
+                    if filename.endswith('.npz'):
+                        try:
+                            data = np.load(os.path.join(working_dir, filename), allow_pickle=True)
+                            for key in data.files:
+                                if data[key].ndim == 0:
+                                    all_scenarios = data[key].item()  # Extract dict from 0-d array
+                                    # Iterate over each scenario
+                                    for scenario_name, scenario_data in all_scenarios.items():
+                                        # Access aggregated_metrics
+                                        metrics = scenario_data['aggregated_metrics']
+                                        # Create plots for this scenario
+                                        try:
+                                            plt.figure()
+                                            # ... plotting code using metrics ...
+                                            plt.savefig(os.path.join(working_dir, f'{scenario_name}_plot.png'))
+                                            plt.close()
+                                        except Exception as e:
+                                            print(f"Error creating plot for {scenario_name}: {e}")
+                                            plt.close()
+                        except Exception as e:
+                            print(f'Error loading {filename}: {e}')
 
-                try:
-                    # First plot
-                    plt.figure()
-                    # ... plotting code ...
-                    plt.savefig('working_dir/[plot_name_1].png')
-                    plt.close()
-                except Exception as e:
-                    print(f"Error creating plot1: {e}")
-                    plt.close()  # Always close figure even if error occurs
-
-                try:
-                    # Second plot
-                    plt.figure()
-                    # ... plotting code ...
-                    plt.savefig('working_dir/[plot_name_2].png')
-                    plt.close()
-                except Exception as e:
-                    print(f"Error creating plot2: {e}")
-                    plt.close()
+                    elif filename.endswith('.npy'):
+                        try:
+                            data = np.load(os.path.join(working_dir, filename), allow_pickle=True)
+                            scenario_name = filename[:-4]  # Remove .npy extension
+                            # Process 2D array data
+                            # Create plots for this scenario
+                            try:
+                                plt.figure()
+                                # ... plotting code using data array ...
+                                plt.savefig(os.path.join(working_dir, f'{scenario_name}_plot.png'))
+                                plt.close()
+                            except Exception as e:
+                                print(f"Error creating plot for {scenario_name}: {e}")
+                                plt.close()
+                        except Exception as e:
+                            print(f'Error loading {filename}: {e}')
             """,
         ]
 

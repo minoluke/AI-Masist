@@ -1,87 +1,94 @@
 import os
-import random
 import numpy as np
+from autogen import (
+    ConversableAgent,
+    GroupChat,
+    GroupChatManager,
+)
 
 working_dir = os.path.join(os.getcwd(), "working")
 os.makedirs(working_dir, exist_ok=True)
 
+# LLM設定
+llm_config = {
+    "config_list": [
+        {
+            "model": "gpt-4o-mini",
+            "api_key": os.environ.get("OPENAI_API_KEY"),
+        }
+    ],
+    "temperature": 0.7,
+    "timeout": 120,
+}
 
-class Agent:
-    def __init__(self, id):
-        self.id = id
-        self.last_contribution = 0
-        self.memory = []
-
-    def decide_contribution(self, total_tokens, target, round_number):
-        # Make a simple decision based on target, previous contributions, etc.
-        if round_number <= 10:  # No rules in the first half
-            return random.randint(0, total_tokens)
-        else:  # Apply rules based on the scenario for the second half
-            return max(
-                0, target[self.id] - self.last_contribution
-            )  # Try to match the rule
-
-
-def run_simulation(scenario):
-    agents = [Agent(i) for i in range(4)]
-    total_rounds = 20
-    metrics = {
-        "rounds": [],
-        "contributions": [],
-        "total_contributed": [],
-        "threshold_met": [],
-        "individual_scores": [],
-    }
-
-    for round_number in range(total_rounds):
-        contributions = [
-            agent.decide_contribution(10, scenario["rules"], round_number)
-            for agent in agents
-        ]
-        total_contribution = sum(contributions)
-        threshold_met = total_contribution >= scenario["threshold"]
-
-        # Update scores
-        for i, agent in enumerate(agents):
-            if threshold_met:
-                agent_score = 10 - contributions[i] + scenario["reward"]
-            else:
-                agent_score = 10 - contributions[i]
-            agent.last_contribution = contributions[i]
-            metrics["individual_scores"].append(agent_score)
-
-        # Collect data for analysis
-        metrics["rounds"].append(round_number + 1)
-        metrics["contributions"].append(contributions)
-        metrics["total_contributed"].append(total_contribution)
-        metrics["threshold_met"].append(threshold_met)
-
-    return metrics
+scenarios = {
+    "FAIRSUFF": {"T": 20, "rules": (5, 5, 5, 5)},
+    "FAIRINF": {"T": 20, "rules": (5, 5, 6, 6)},
+    "UNFAIRSUFF": {"T": 22, "rules": (5, 5, 6, 6)},
+    "UNFAIRINF": {"T": 22, "rules": (6, 6, 6, 6)},
+    "CONTROL": {"T": 22, "rules": ()},
+}
 
 
-def main():
-    scenarios = [
-        {"name": "FAIRSUFF", "threshold": 20, "rules": [5, 5, 5, 5], "reward": 10},
-        {"name": "UNFAIRINF", "threshold": 22, "rules": [6, 6, 6, 6], "reward": 10},
+def create_agents():
+    return [
+        ConversableAgent(
+            name=f"Agent{i+1}",
+            system_message="トークンを選択してください。",
+            llm_config=llm_config,
+            human_input_mode="NEVER",
+        )
+        for i in range(4)
     ]
 
-    experiment_data = {}
 
-    for scenario in scenarios:
-        logs = {"runs": []}
-        for seed in range(3):  # Running multiple trials with different seeds
-            random.seed(seed)
-            metrics = run_simulation(scenario)
-            logs["runs"].append({"seed": seed, "metrics": metrics})
+def run_simulation(scenario_name):
+    scenario = scenarios[scenario_name]
+    successes = []
+    total_messages = []
+    for seed in range(3):  # 3回試行
+        np.random.seed(seed)
+        agents = create_agents()
+        group_chat = GroupChat(agents=agents, messages=[], max_round=20)
+        manager = GroupChatManager(group_chat, llm_config)
 
-        experiment_data[scenario["name"]] = logs
+        round_results = []
 
-    # Save experiment data for later analysis
+        for round_number in range(20):
+            # 各エージェントがトークンを決定
+            contributions = [
+                agent.initiate_chat(
+                    recipient=manager,
+                    message=f"私は{np.random.randint(0, 11)}トークンを出します。",
+                )
+                for agent in agents
+            ]
+            total_contrib = sum(
+                int(msg["content"].split(" ")[1]) for msg in contributions
+            )
+            success = total_contrib >= scenario["T"]
+            round_results.append(
+                (
+                    round_number,
+                    [int(msg["content"].split(" ")[1]) for msg in contributions],
+                    total_contrib,
+                    success,
+                )
+            )
+
+        total_messages.extend(round_results)
+
+        print(
+            f"Run {seed} (scenario: {scenario_name}): total_contributions = {[result[2] for result in round_results]}"
+        )
+
+    # 結果保存
     np.savez_compressed(
-        os.path.join(working_dir, "experiment_data.npz"), experiment_data
+        os.path.join(working_dir, f"experiment_data_{scenario_name}.npz"),
+        total_messages=total_messages,
     )
 
 
-for run_metrics in experiment_data.values():
-    for run in run_metrics["runs"]:
-        print(f'Run with seed={run["seed"]}: metrics = {run["metrics"]}')
+# 各シナリオを実行
+for scenario_name in scenarios.keys():
+    run_simulation(scenario_name)

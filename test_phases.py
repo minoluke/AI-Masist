@@ -6,6 +6,7 @@ Individual Phase Testing Script
 import logging
 import os
 import sys
+import pickle
 from dataclasses import dataclass
 from pathlib import Path
 from dotenv import load_dotenv
@@ -298,7 +299,6 @@ T = 22
 
 ログ・分析指標
 ログ形式：
- CSV または JSONL（1行が1ラウンド）
 記録すべき内容：
 ラウンド番号
 
@@ -427,14 +427,13 @@ os.makedirs(working_dir, exist_ok=True)
 """
 
     cfg = SimpleConfig()
-    interpreter = Interpreter(timeout=cfg.exec.timeout, num_gpus=cfg.exec.num_gpus)
+    interpreter = Interpreter(working_dir=working_dir, timeout=cfg.exec.timeout)
 
     print("Executing code...")
-    exec_result = interpreter.run(code_with_wd, capture_output=True)
+    exec_result = interpreter.run(code_with_wd, reset_session=True)
     interpreter.cleanup_session()
 
     print(f"\n✓ Execution completed in {exec_result.exec_time:.2f}s")
-    print(f"✓ Exit code: {exec_result.exit_code}")
 
     if exec_result.exc_type:
         print(f"❌ Exception: {exec_result.exc_type}")
@@ -444,6 +443,12 @@ os.makedirs(working_dir, exist_ok=True)
 
     print(f"\n--- Output (first 500 chars) ---")
     print(exec_result.term_out[:500] if exec_result.term_out else "(no output)")
+
+    # Save execution results for reuse by later phases
+    result_cache_path = Path("./test_output/phase2_result.pkl")
+    with open(result_cache_path, "wb") as f:
+        pickle.dump({"exec_result": exec_result, "node": node}, f)
+    print(f"\n✓ Saved execution results to {result_cache_path}")
 
     return exec_result, node
 
@@ -464,15 +469,25 @@ def test_phase3_evaluation(node=None, exec_result=None):
     except ModuleNotFoundError:
         from core.node import Node
 
+    # Load from cache if not provided
     if node is None or exec_result is None:
-        print("❌ Need node and exec_result. Run phase 1 and 2 first.")
-        return None
+        result_cache_path = Path("./test_output/phase2_result.pkl")
+        if not result_cache_path.exists():
+            print("❌ No cached execution results found. Run phase 2 first.")
+            return None
+
+        print(f"Loading cached execution results from {result_cache_path}")
+        with open(result_cache_path, "rb") as f:
+            cached_data = pickle.load(f)
+            exec_result = cached_data["exec_result"]
+            node = cached_data["node"]
 
     cfg = SimpleConfig()
     evaluator = ResultEvaluator(task_desc=SAMPLE_TASK_DESC, cfg=cfg)
 
+    working_dir = "./test_output/phase2_working/working"
     print("Evaluating results...")
-    evaluator.evaluate(node, exec_result)
+    evaluator.evaluate(node, exec_result, workspace=working_dir)
 
     print(f"\n✓ Is buggy: {node.is_buggy}")
     print(f"✓ Analysis:\n{node.analysis}")
@@ -496,24 +511,33 @@ def test_phase4_metrics_extraction(node=None):
     except ModuleNotFoundError:
         from executor.interpreter import Interpreter
 
+    # Load from cache if not provided
     if node is None:
-        print("❌ Need node with executed code. Run phases 1-2 first.")
-        return None
+        result_cache_path = Path("./test_output/phase2_result.pkl")
+        if not result_cache_path.exists():
+            print("❌ No cached execution results found. Run phase 2 first.")
+            return None
 
-    working_dir = "./test_output/phase2_working"
+        print(f"Loading cached execution results from {result_cache_path}")
+        with open(result_cache_path, "rb") as f:
+            cached_data = pickle.load(f)
+            node = cached_data["node"]
+
+    base_dir = "./test_output/phase2_working"
+    working_dir = os.path.join(base_dir, "working")
     if not Path(working_dir).exists():
         print(f"❌ Working directory {working_dir} not found.")
         return None
 
     cfg = SimpleConfig()
-    interpreter = Interpreter(timeout=cfg.exec.timeout, num_gpus=cfg.exec.num_gpus)
+    interpreter = Interpreter(working_dir=base_dir, timeout=cfg.exec.timeout)
     extractor = MetricsExtractor(cfg=cfg, interpreter=interpreter)
 
     print("Extracting metrics...")
     extractor.extract(node, working_dir)
 
     print(f"\n✓ Metric: {node.metric}")
-    if hasattr(node, "parse_term_out"):
+    if hasattr(node, "parse_term_out") and node.parse_term_out:
         print(f"✓ Parse output:\n{node.parse_term_out[:500]}")
 
     return node
@@ -535,17 +559,26 @@ def test_phase5_plot_generation(node=None):
     except ModuleNotFoundError:
         from executor.interpreter import Interpreter
 
+    # Load from cache if not provided
     if node is None:
-        print("❌ Need node with executed code. Run phases 1-2 first.")
-        return None
+        result_cache_path = Path("./test_output/phase2_result.pkl")
+        if not result_cache_path.exists():
+            print("❌ No cached execution results found. Run phase 2 first.")
+            return None
 
-    working_dir = "./test_output/phase2_working"
+        print(f"Loading cached execution results from {result_cache_path}")
+        with open(result_cache_path, "rb") as f:
+            cached_data = pickle.load(f)
+            node = cached_data["node"]
+
+    base_dir = "./test_output/phase2_working"
+    working_dir = os.path.join(base_dir, "working")
     if not Path(working_dir).exists():
         print(f"❌ Working directory {working_dir} not found.")
         return None
 
     cfg = SimpleConfig()
-    interpreter = Interpreter(timeout=cfg.exec.timeout, num_gpus=cfg.exec.num_gpus)
+    interpreter = Interpreter(working_dir=base_dir, timeout=cfg.exec.timeout)
     generator = PlotGenerator(cfg=cfg, interpreter=interpreter)
 
     print("Generating plots...")
@@ -648,17 +681,17 @@ def main():
     elif phase == "2":
         test_phase2_execution()
     elif phase == "3":
-        exec_result, node = test_phase2_execution()
-        test_phase3_evaluation(node, exec_result)
+        # Phase 3 will load cached results automatically
+        test_phase3_evaluation()
     elif phase == "4":
-        exec_result, node = test_phase2_execution()
-        test_phase4_metrics_extraction(node)
+        # Phase 4 will load cached results automatically
+        test_phase4_metrics_extraction()
     elif phase == "5":
-        exec_result, node = test_phase2_execution()
-        test_phase5_plot_generation(node)
+        # Phase 5 will load cached results automatically
+        test_phase5_plot_generation()
     elif phase == "6":
-        exec_result, node = test_phase2_execution()
-        test_phase5_plot_generation(node)
+        # Phase 6 will load cached results automatically
+        node = test_phase5_plot_generation()
         test_phase6_vlm_analysis(node)
     elif phase == "all":
         run_all_phases()

@@ -28,10 +28,10 @@ class MetricsExtractor:
         3 steps: 1) Generate parse code, 2) Execute parse code, 3) Structure metrics
         """
         # Check if data files exist
-        data_files = [f for f in os.listdir(working_dir) if f.endswith(".npy")]
+        data_files = [f for f in os.listdir(working_dir) if f.endswith((".npy", ".npz"))]
         if not data_files:
             logger.warning(
-                "No .npy files found in working directory. Data may not have been saved properly."
+                "No .npy or .npz files found in working directory. Data may not have been saved properly."
             )
             return
 
@@ -77,21 +77,20 @@ class MetricsExtractor:
         """Step 1: Generate metrics parsing code using LLM"""
         parse_metrics_prompt = {
             "Introduction": (
-                "You are an AI researcher analyzing experimental results stored in numpy files. "
-                "Write code to load and analyze the metrics from experiment_data.npy. "
-                "For multi-agent simulations, focus on scenario-level aggregated metrics."
+                "You are an AI researcher analyzing experimental results stored in data files. "
+                "Write code to load and analyze the metrics from data files in the working directory."
             ),
             "Context": [
                 "Original Code: " + node.code,
             ],
             "Instructions": [
                 "0. Make sure to get the working directory from os.path.join(os.getcwd(), 'working')",
-                "1. Load the experiment_data.npy file, which is located in the working directory",
-                "2. Extract metrics for each scenario/dataset. Make sure to refer to the original code to understand the structure of the data.",
-                "3. For multi-agent simulations, focus on aggregated_metrics across runs rather than individual run metrics",
-                "4. Always print the name of the scenario/dataset before printing the metrics",
-                "5. Always print the name of the metric before printing the value by specifying the metric name clearly. Use descriptive labels such as 'consensus rate,' 'average turns,' 'convergence time,' etc.",
-                "6. You only need to print the aggregated or final value for each metric for each scenario",
+                "1. Find and load data files (.npy, .npz, or .csv) in the working directory",
+                "2. Extract metrics for each dataset/scenario. Make sure to refer to the original code to understand the structure of the data.",
+                "3. For .npz files containing nested dictionaries, iterate over the dictionary keys (scenarios) rather than assuming the filename is the scenario name",
+                "4. Always print the name of the dataset/scenario before printing the metrics",
+                "5. Always print the name of the metric before printing the value by specifying the metric name clearly. Avoid vague terms like 'train,' 'val,' or 'test.' Instead, use precise labels such as 'train accuracy,' 'validation loss,' or 'test F1 score,' etc.",
+                "6. You only need to print the best or final value for each metric for each dataset",
                 "7. DO NOT CREATE ANY PLOTS",
                 "Important code structure requirements:",
                 "  - Do NOT put any execution code inside 'if __name__ == \"__main__\":' block. Do not use 'if __name__ == \"__main__\":' at all.",
@@ -100,10 +99,46 @@ class MetricsExtractor:
             ],
             "Example data loading code": [
                 """
-                import matplotlib.pyplot as plt
+                import os
                 import numpy as np
 
-                experiment_data = np.load(os.path.join(os.getcwd(), 'experiment_data.npy'), allow_pickle=True).item()
+                working_dir = os.path.join(os.getcwd(), 'working')
+
+                # Example: Load .npz file with nested scenario dictionaries
+                # Structure: .npz contains "experiment_data" key, which is a 0-d array containing:
+                #   {"scenario1": {"runs": [...], "aggregated_metrics": {...}},
+                #    "scenario2": {"runs": [...], "aggregated_metrics": {...}}}
+                #
+                # for filename in os.listdir(working_dir):
+                #     if filename.endswith('.npz'):
+                #         data = np.load(os.path.join(working_dir, filename), allow_pickle=True)
+                #         for key in data.files:
+                #             if data[key].ndim == 0:
+                #                 all_scenarios = data[key].item()  # Extract dict from 0-d array
+                #                 # Now iterate over each scenario in the dict
+                #                 for scenario_name, scenario_data in all_scenarios.items():
+                #                     print(f"Scenario: {scenario_name}")
+                #                     metrics = scenario_data["aggregated_metrics"]
+                #                     # Print each metric with clear labels
+                #                     for metric_name, metric_value in metrics.items():
+                #                         print(f"{metric_name}: {metric_value}")
+
+                # Example: Load .npy file (2D numpy array)
+                # for filename in os.listdir(working_dir):
+                #     if filename.endswith('.npy'):
+                #         data = np.load(os.path.join(working_dir, filename), allow_pickle=True)
+                #         # data is a 2D array with shape (rows, columns)
+                #         # Extract scenario name from filename
+                #         scenario_name = filename[:-4]  # Remove .npy extension
+                #         print(f"Scenario: {scenario_name}")
+                #         # Calculate metrics from the array
+                #         # Example: if column 6 is 'achieved' boolean, calculate success rate
+                #         # Filter to agent_id==0 to avoid counting same round multiple times
+                #         agent0_rows = data[data[:, 3] == 0]  # Assuming column 3 is agent_id
+                #         success_rate = np.mean(agent0_rows[:, 6])  # Assuming column 6 is achieved
+                #         avg_total_contribution = np.mean(agent0_rows[:, 5])  # Assuming column 5 is total_contribution
+                #         print(f"success_rate: {success_rate}")
+                #         print(f"avg_total_contribution: {avg_total_contribution}")
                 """
             ],
             "Response format": self._prompt_metricparse_resp_fmt(),
