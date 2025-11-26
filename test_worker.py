@@ -2,11 +2,9 @@
 Test script for worker node processor
 Tests single node processing through all phases
 """
-import os
 import sys
 import logging
 from pathlib import Path
-from dataclasses import dataclass
 from dotenv import load_dotenv
 
 # Add parent directory to path
@@ -28,6 +26,7 @@ logging.basicConfig(
 
 from unitTest.worker import process_node_wrapper
 from unitTest.core import Node, Journal
+from unitTest.config import Config
 
 # サンプルタスク（MASist向け - TPGGシミュレーション）
 SAMPLE_TASK_DESC = """
@@ -297,52 +296,11 @@ SAMPLE_METRICS = [
 ]
 
 
-@dataclass
-class SimpleConfig:
-    """Simple configuration class for testing"""
-
-    @dataclass
-    class ExecConfig:
-        timeout: int = 300  # 5 minutes
-        num_gpus: int = 0
-        format_tb_ipython: bool = True
-        agent_file_name: str = "agent.py"
-
-    @dataclass
-    class AgentConfig:
-        @dataclass
-        class CodeConfig:
-            model: str = "gpt-4o-mini"
-            temp: float = 1.0
-
-        @dataclass
-        class FeedbackConfig:
-            model: str = "gpt-4o-mini"
-            temp: float = 0.3
-
-        @dataclass
-        class VLMFeedbackConfig:
-            model: str = "gpt-4o-mini"
-            temp: float = 0.3
-
-        k_fold_validation: int = 1
-        data_preview: bool = False
-
-        def __post_init__(self):
-            self.code = self.CodeConfig()
-            self.feedback = self.FeedbackConfig()
-            self.vlm_feedback = self.VLMFeedbackConfig()
-
-    @dataclass
-    class ExperimentConfig:
-        num_syn_datasets: int = 2
-
-    workspace_dir: str = "/Users/idenominoru/Desktop/tmp/workspaces/test_worker"
-
-    def __post_init__(self):
-        self.exec = self.ExecConfig()
-        self.agent = self.AgentConfig()
-        self.experiment = self.ExperimentConfig()
+def create_test_config(workspace_name: str = "test_worker") -> Config:
+    """Create a test configuration with workspace under project root"""
+    config = Config(workspace_name=workspace_name)
+    config.exec.timeout = 300  # 5 minutes for worker tests
+    return config
 
 
 def test_draft_node_processing():
@@ -352,11 +310,11 @@ def test_draft_node_processing():
     print("=" * 80)
 
     # Setup
-    config = SimpleConfig()
+    config = create_test_config()
     task_desc = SAMPLE_TASK_DESC
 
     # Create workspace
-    os.makedirs(config.workspace_dir, exist_ok=True)
+    config.ensure_dirs()
 
     try:
         # Process a draft node (parent_node_data = None)

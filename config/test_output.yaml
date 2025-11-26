@@ -1,0 +1,43 @@
+workspace_dir: !!python/object/apply:pathlib.PosixPath
+- /
+- Users
+- idenominoru
+- Desktop
+- tmp
+- unitTest
+- workspaces
+- test_config
+log_dir: !!python/object/apply:pathlib.PosixPath
+- /
+- Users
+- idenominoru
+- Desktop
+- tmp
+- unitTest
+- logs
+- test_config
+workspace_name: test_config
+exec:
+  timeout: 120
+  num_gpus: 0
+  format_tb_ipython: true
+  agent_file_name: agent.py
+agent:
+  num_workers: 2
+  k_fold_validation: 1
+  data_preview: false
+  code:
+    model: gpt-4o-mini
+    temp: 1.0
+  feedback:
+    model: gpt-4o-mini
+    temp: 0.3
+  vlm_feedback:
+    model: gpt-4o-mini
+    temp: 0.3
+  search:
+    num_drafts: 4
+    debug_prob: 0.5
+    max_debug_depth: 3
+experiment:
+  num_syn_datasets: 2

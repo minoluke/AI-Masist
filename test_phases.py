@@ -7,7 +7,6 @@ import logging
 import os
 import sys
 import pickle
-from dataclasses import dataclass
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -32,49 +31,14 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+from unitTest.config import Config
 
-@dataclass
-class SimpleConfig:
-    """Simple configuration class for testing"""
 
-    @dataclass
-    class ExecConfig:
-        timeout: int = 300  # 5 minutes
-        num_gpus: int = 0
-
-    @dataclass
-    class AgentConfig:
-        @dataclass
-        class CodeConfig:
-            model: str = "gpt-4o-mini"
-            temp: float = 1.0
-
-        @dataclass
-        class FeedbackConfig:
-            model: str = "gpt-4o-mini"
-            temp: float = 0.3
-
-        @dataclass
-        class VLMFeedbackConfig:
-            model: str = "gpt-4o-mini"
-            temp: float = 0.3
-
-        k_fold_validation: int = 1
-        data_preview: bool = False
-
-        def __post_init__(self):
-            self.code = self.CodeConfig()
-            self.feedback = self.FeedbackConfig()
-            self.vlm_feedback = self.VLMFeedbackConfig()
-
-    @dataclass
-    class ExperimentConfig:
-        num_syn_datasets: int = 2
-
-    def __post_init__(self):
-        self.exec = self.ExecConfig()
-        self.agent = self.AgentConfig()
-        self.experiment = self.ExperimentConfig()
+def create_test_config(workspace_name: str = "test_phases") -> Config:
+    """Create a test configuration with workspace under project root"""
+    config = Config(workspace_name=workspace_name)
+    config.exec.timeout = 300  # 5 minutes for phase tests
+    return config
 
 
 # サンプルタスク（MASist向け）
@@ -356,7 +320,7 @@ def test_phase1_code_generation():
     except ModuleNotFoundError:
         from phases import CodeGenerator
 
-    cfg = SimpleConfig()
+    cfg = create_test_config()
     generator = CodeGenerator(
         task_desc=SAMPLE_TASK_DESC,
         evaluation_metrics=SAMPLE_METRICS,
@@ -426,7 +390,7 @@ os.makedirs(working_dir, exist_ok=True)
 {node.code}
 """
 
-    cfg = SimpleConfig()
+    cfg = create_test_config()
     interpreter = Interpreter(working_dir=working_dir, timeout=cfg.exec.timeout)
 
     print("Executing code...")
@@ -482,7 +446,7 @@ def test_phase3_evaluation(node=None, exec_result=None):
             exec_result = cached_data["exec_result"]
             node = cached_data["node"]
 
-    cfg = SimpleConfig()
+    cfg = create_test_config()
     evaluator = ResultEvaluator(task_desc=SAMPLE_TASK_DESC, cfg=cfg)
 
     working_dir = "./test_output/phase2_working/working"
@@ -529,7 +493,7 @@ def test_phase4_metrics_extraction(node=None):
         print(f"❌ Working directory {working_dir} not found.")
         return None
 
-    cfg = SimpleConfig()
+    cfg = create_test_config()
     interpreter = Interpreter(working_dir=base_dir, timeout=cfg.exec.timeout)
     extractor = MetricsExtractor(cfg=cfg, interpreter=interpreter)
 
@@ -577,7 +541,7 @@ def test_phase5_plot_generation(node=None):
         print(f"❌ Working directory {working_dir} not found.")
         return None
 
-    cfg = SimpleConfig()
+    cfg = create_test_config()
     interpreter = Interpreter(working_dir=base_dir, timeout=cfg.exec.timeout)
     generator = PlotGenerator(cfg=cfg, interpreter=interpreter)
 
@@ -607,7 +571,7 @@ def test_phase6_vlm_analysis(node=None):
         print("❌ Need node with generated plots. Run phases 1-5 first.")
         return None
 
-    cfg = SimpleConfig()
+    cfg = create_test_config()
     analyzer = VLMAnalyzer(task_desc=SAMPLE_TASK_DESC, cfg=cfg)
 
     print("Analyzing plots with VLM...")

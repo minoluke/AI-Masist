@@ -9,11 +9,9 @@ Tests parallel node processing with multiple workers
 - Test 4: _select_parallel_nodes() - Best-First探索（debug/improve選択）
 - Test 5: run() - 複数ステップ実行
 """
-import os
 import sys
 import logging
 from pathlib import Path
-from dataclasses import dataclass, field
 from dotenv import load_dotenv
 
 # Add parent directory to path
@@ -36,6 +34,7 @@ logging.basicConfig(
 from unitTest.agent import ParallelAgent
 from unitTest.core import Journal, Node
 from unitTest.core.metric import MetricValue
+from unitTest.config import Config
 
 # サンプルタスク（シンプル版 - テスト用）
 SIMPLE_TASK_DESC = """
@@ -304,63 +303,12 @@ SAMPLE_METRICS = [
     "rule_compliance_rate",
 ]
 
-@dataclass
-class SearchConfig:
-    """Search configuration for ParallelAgent"""
-    num_drafts: int = 4  # Maximum number of draft nodes
-    debug_prob: float = 0.5  # Probability of debugging vs new draft
-    max_debug_depth: int = 3  # Maximum debug depth
 
-
-@dataclass
-class CodeConfig:
-    model: str = "gpt-4o-mini"
-    temp: float = 1.0
-
-
-@dataclass
-class FeedbackConfig:
-    model: str = "gpt-4o-mini"
-    temp: float = 0.3
-
-
-@dataclass
-class VLMFeedbackConfig:
-    model: str = "gpt-4o-mini"
-    temp: float = 0.3
-
-
-@dataclass
-class ExecConfig:
-    timeout: int = 120  # 2 minutes
-    num_gpus: int = 0
-    format_tb_ipython: bool = True
-    agent_file_name: str = "agent.py"
-
-
-@dataclass
-class AgentConfig:
-    num_workers: int = 2  # Number of parallel workers (reduced for testing)
-    k_fold_validation: int = 1
-    data_preview: bool = False
-    code: CodeConfig = field(default_factory=CodeConfig)
-    feedback: FeedbackConfig = field(default_factory=FeedbackConfig)
-    vlm_feedback: VLMFeedbackConfig = field(default_factory=VLMFeedbackConfig)
-    search: SearchConfig = field(default_factory=SearchConfig)
-
-
-@dataclass
-class ExperimentConfig:
-    num_syn_datasets: int = 2
-
-
-@dataclass
-class TestConfig:
-    """Configuration for parallel agent testing"""
-    workspace_dir: str = "/Users/idenominoru/Desktop/tmp/unitTest/workspaces/test_parallel"
-    exec: ExecConfig = field(default_factory=ExecConfig)
-    agent: AgentConfig = field(default_factory=AgentConfig)
-    experiment: ExperimentConfig = field(default_factory=ExperimentConfig)
+def create_test_config(workspace_name: str = "test_parallel", num_workers: int = 2) -> Config:
+    """Create a test configuration with workspace under project root"""
+    config = Config(workspace_name=workspace_name)
+    config.agent.num_workers = num_workers
+    return config
 
 
 def test_parallel_agent_init():
@@ -369,7 +317,7 @@ def test_parallel_agent_init():
     print("Test 1: ParallelAgent Initialization")
     print("=" * 80)
 
-    config = TestConfig()
+    config = create_test_config()
     journal = Journal()
 
     try:
@@ -402,12 +350,12 @@ def test_parallel_agent_single_step():
     print("Test 2: ParallelAgent Single Step Execution")
     print("=" * 80)
 
-    config = TestConfig()
+    config = create_test_config()
     # Reduce workers for faster testing
     config.agent.num_workers = 2
 
     journal = Journal()
-    os.makedirs(config.workspace_dir, exist_ok=True)
+    config.ensure_dirs()
 
     try:
         with ParallelAgent(
@@ -481,11 +429,11 @@ def test_parallel_agent_4_workers():
     print("Test 3: ParallelAgent 4 Workers Parallel Execution")
     print("=" * 80)
 
-    config = TestConfig()
+    config = create_test_config()
     config.agent.num_workers = 4  # 4ワーカー並列
 
     journal = Journal()
-    os.makedirs(config.workspace_dir, exist_ok=True)
+    config.ensure_dirs()
 
     try:
         with ParallelAgent(
@@ -524,7 +472,7 @@ def test_select_parallel_nodes_logic():
     print("Test 4: _select_parallel_nodes() Best-First Search Logic")
     print("=" * 80)
 
-    config = TestConfig()
+    config = create_test_config()
     config.agent.num_workers = 4
     config.agent.search.num_drafts = 4
     config.agent.search.debug_prob = 0.5
@@ -641,12 +589,12 @@ def test_parallel_agent_run():
     print("Test 5: ParallelAgent Full Run (max 2 steps)")
     print("=" * 80)
 
-    config = TestConfig()
+    config = create_test_config()
     config.agent.num_workers = 2
     config.agent.search.num_drafts = 2  # Stop drafting after 2
 
     journal = Journal()
-    os.makedirs(config.workspace_dir, exist_ok=True)
+    config.ensure_dirs()
 
     try:
         with ParallelAgent(
@@ -691,12 +639,12 @@ def test_parallel_agent_full_4workers():
     print("Test 6: ParallelAgent Full Run (4 workers, max 20 steps)")
     print("=" * 80)
 
-    config = TestConfig()
+    config = create_test_config()
     config.agent.num_workers = 4
     config.agent.search.num_drafts = 4
 
     journal = Journal()
-    os.makedirs(config.workspace_dir, exist_ok=True)
+    config.ensure_dirs()
 
     try:
         with ParallelAgent(
