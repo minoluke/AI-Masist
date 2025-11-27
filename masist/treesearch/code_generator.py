@@ -4,12 +4,17 @@ Extracts and adapts code from parallel_agent.py MinimalAgent class
 """
 import os
 import random
+import logging
 from typing import Any, Tuple
 import humanize
 
 from .journal import Node
+
 from .backend import query
+
 from .utils.response import extract_code, extract_text_up_to_code, wrap_code
+
+logger = logging.getLogger(__name__)
 
 
 class CodeGenerator:
@@ -30,7 +35,7 @@ class CodeGenerator:
             with open(doc_path, "r", encoding="utf-8") as f:
                 return f.read()
         except FileNotFoundError:
-            print(f"Warning: AG2 reference document not found at {doc_path}")
+            logger.warning(f"AG2 reference document not found at {doc_path}")
             return ""
 
     def generate(self) -> Node:
@@ -41,7 +46,7 @@ class CodeGenerator:
                 "シミュレーションエンジン開発を担うAI研究者です。"
                 "最初のタスクは、以下の Research idea（シミュレーション検討シート）に基づき、"
                 "Autogen を利用した LLM マルチエージェントシミュレーションを設計・実装し、"
-                "複数シナリオの実行・ログ収集・評価・簡易可視化まで行う堅牢なベースラインを構築することです。"
+                "実行・ログ収集・評価まで行う堅牢なベースラインを構築することです。"
                 "まずは高度な最適化よりも、正しく動作する最小限のパイプライン構築を優先してください。"
             ),
             "Research idea": self.task_desc,
@@ -55,7 +60,8 @@ class CodeGenerator:
                 "Memory セクションの情報と一貫する設計にすること。",
                 "シミュレーション検討シート（Research idea）の内容を忠実に反映すること。",
                 "EDA（データ探索）は提案しないこと。",
-                "必要に応じて複数の合成シナリオ（異なる環境設定や役割構造）を作成してよい。",
+                "Research idea に複数条件の比較がある場合は各条件を1回ずつ実行。"
+                "同じ条件の繰り返し試行（統計的安定化）は不要。",
                 "マルチエージェントフレームワークは必ず Autogen を使用すること。",
             ],
             "Evaluation Metric(s)": self.evaluation_metrics,
@@ -70,9 +76,9 @@ class CodeGenerator:
         if self.cfg.agent.data_preview:
             prompt["Data Overview"] = self.data_preview
 
-        print("CodeGenerator: Getting plan and code")
+        logger.debug("CodeGenerator: Getting plan and code")
         plan, code = self.plan_and_code_query(prompt)
-        print("CodeGenerator: Draft complete")
+        logger.debug("CodeGenerator: Draft complete")
         return Node(plan=plan, code=code)
 
     @property
@@ -99,56 +105,75 @@ class CodeGenerator:
 
     @property
     def _prompt_impl_guideline(self):
-        # デフォルト値を設定
-        num_syn_datasets = 2
-        if hasattr(self.cfg, "experiment") and hasattr(self.cfg.experiment, "num_syn_datasets"):
-            num_syn_datasets = self.cfg.experiment.num_syn_datasets
-
         impl_guideline = [
             "【MASist シミュレーション要件】",
             "  - Autogen によるエージェント定義・グループ対話・停止条件を用いた"
             "    マルチエージェントシミュレーションパイプラインを構築すること。",
             "  - エージェントのロール、内部状態、環境状態、終了条件を明示すること。",
-            "  - 同じシナリオを複数回試行（異なる乱数シード）できる構造にすること。",
-            f"  - 動作確認用に、複数のシナリオ（最低 {num_syn_datasets} 件）で実行し、"
-            "    シナリオ間比較を行うこと。",
+            "",
+            "【シミュレーション実行ルール ※重要※】",
+            "  - シミュレーションは「1つの条件（シナリオ）につき1回のみ」実行すること。",
+            "    （同じ条件を繰り返し実行して平均化したり、統計的に安定化させたりしない）",
+            "",
+            "  - ただし、Research idea に複数の条件（例：条件A と 条件B の比較）が含まれる場合、",
+            "    それぞれを別シナリオとして **1回ずつ** 実行し、比較できるようにしてよい。",
+            "",
+            "  - 重要：『反復禁止』の意味：",
+            "       ・同じ条件を複数回試行 → 禁止（統計的安定化のための繰り返しは不要）",
+            "       ・異なる条件のシナリオを各1回ずつ実行 → 許可（A/Bテスト、条件比較は OK）",
+            "",
+            "  - 複数シード評価（統計的信頼性の確保）はフレームワーク側で行うため、",
+            "    コード内で同一条件を複数回試行する必要はない。",
             "",
             "【プロンプト/入力設計】",
             "  - 検討シートの項目（背景、目的、研究質問、仮説、エージェント、環境、プロトコルなど）を"
             "    そのまま LLM 入力として使える構造に整形すること。",
             "",
-            "【experiment_data の構造（修正版：教師あり学習前提を撤廃）】",
+            "【experiment_data の構造】",
+            "  # 複数条件がある場合（条件比較実験）",
             "  experiment_data = {",
-            "      'scenario_name': {",
-            "          'runs': [",
-            "              {",
-            "                  'seed': 0,",
-            "                  'messages': [...],",
-            "                  'metrics': {...},",
-            "              },",
-            "          ],",
-            "          'aggregated_metrics': {...},",
+            "      'scenarios': {",
+            "          'CONDITION_A': {",
+            "              'messages': [...],     # 全メッセージログ（ターン順）",
+            "              'events': [...],       # 重要イベント（合意成立、衝突など）",
+            "              'metrics': {...},      # この条件の評価指標",
+            "              'config': {...},       # この条件の設定",
+            "          },",
+            "          'CONDITION_B': { ... },",
+            "          # ... 他の条件",
             "      },",
+            "      'metrics': {...},              # 全条件の集約メトリクス（オプション）",
+            "  }",
+            "",
+            "  # 単一条件の場合",
+            "  experiment_data = {",
+            "      'scenarios': {",
+            "          'default': {",
+            "              'messages': [...],",
+            "              'events': [...],",
+            "              'metrics': {...},",
+            "              'config': {...},",
+            "          },",
+            "      },",
+            "      'metrics': {...},",
             "  }",
             "",
             "【シミュレーションの記録】",
-            "  - 各 run（試行）で記録すべき情報：",
+            "  - 記録すべき情報：",
             "        ・全メッセージログ（ターン順）",
             "        ・途中の重要イベント（例：合意成立、衝突）",
-            "        ・run の評価指標（self.evaluation_metrics）",
-            "  - scenario ごとに aggregated_metrics を計算すること（平均・分散など）。",
+            "        ・評価指標（evaluation_metrics）",
+            "        ・条件ごとの設定（config）",
             "",
-            "【評価要件（train/val/loss を撤廃し MAS 向けに修正済み）】",
-            "  - 各 run の終了後に主要メトリクスを print：",
-            "       print(f'Run {run_id} (seed={seed}): metrics = {metrics}')",
-            "  - 各 scenario 終了後に aggregated_metrics を print。",
+            "【評価要件】",
+            "  - シミュレーション終了後に主要メトリクスを print：",
+            "       print(f'Simulation completed: metrics = {metrics}')",
             "  - ALL metrics を追跡し、実行後に保存する。",
             "",
             "【保存要件（ログ・メトリクス）※必須※】",
-            "  - **重要**: 必ず np.savez_compressed() で experiment_data 全体を保存すること。",
+            "  - **重要**: 必ず np.savez_compressed() で experiment_data を保存すること。",
             "  - **JSON形式での保存は禁止**。必ず .npz 形式を使用すること。",
-            "  - **ファイル名は必ず 'experiment_data.npz' とすること（タイムスタンプやシナリオ名を含めない）**",
-            "  - **シナリオごとに別ファイルを作成しないこと。全シナリオを1つの辞書にまとめて保存する**",
+            "  - **ファイル名は必ず 'experiment_data.npz' とすること**",
             "  - 保存例:",
             "       np.savez_compressed(f'{working_dir}/experiment_data.npz', experiment_data=np.array(experiment_data, dtype=object))",
             "  - 保存先は working_dir とする。",
@@ -162,7 +187,7 @@ class CodeGenerator:
             "  - すべての実行コードはグローバルスコープに直接記述すること（関数定義の外）。",
             "  - 外部設定ファイルに依存せず、1ファイルで完結すること。",
             f"  - 実行時間は {humanize.naturaldelta(self.cfg.exec.timeout)} 内で収まるよう、"
-            "    試行数・最大ターン数を適切に設定すること。",
+            "    最大ターン数を適切に設定すること。",
             "",
             "【Autogen 依存について】",
             "  - Autogen および LLM API キーが環境に存在する前提で、コードは単一ファイルとして成立すべき。",
@@ -200,11 +225,11 @@ class CodeGenerator:
                 # merge all code blocks into a single string
                 return nl_text, code
 
-            print("Plan + code extraction failed, retrying...")
+            logger.debug("Plan + code extraction failed, retrying...")
             prompt["Parsing Feedback"] = (
                 "The code extraction failed. Make sure to use the format ```python ... ``` for the code blocks."
             )
-        print("Final plan + code extraction attempt failed, giving up...")
+        logger.warning("Final plan + code extraction attempt failed, giving up...")
         return "", completion_text  # type: ignore
 
     # ========== Week 2: Debug/Improve メソッド ==========
@@ -250,13 +275,13 @@ class CodeGenerator:
         if self.ag2_reference:
             prompt["AG2 API Reference"] = self.ag2_reference
 
-        print("[yellow]--------------------------------[/yellow]")
-        print(f"[yellow]CodeGenerator: Debugging node {parent_node.id}[/yellow]")
-        print("[yellow]--------------------------------[/yellow]")
+        logger.debug("=" * 40)
+        logger.debug(f"CodeGenerator: Debugging node {parent_node.id}")
+        logger.debug("=" * 40)
 
-        print("CodeGenerator: Getting debug plan and code")
+        logger.debug("CodeGenerator: Getting debug plan and code")
         plan, code = self.plan_and_code_query(prompt)
-        print("CodeGenerator: Debug complete")
+        logger.debug("CodeGenerator: Debug complete")
 
         return Node(plan=plan, code=code, parent=parent_node)
 
@@ -314,13 +339,13 @@ class CodeGenerator:
         if self.ag2_reference:
             prompt["AG2 API Reference"] = self.ag2_reference
 
-        print("[green]--------------------------------[/green]")
-        print(f"[green]CodeGenerator: Improving node {parent_node.id}[/green]")
-        print("[green]--------------------------------[/green]")
+        logger.debug("=" * 40)
+        logger.debug(f"CodeGenerator: Improving node {parent_node.id}")
+        logger.debug("=" * 40)
 
-        print("CodeGenerator: Getting improvement plan and code")
+        logger.debug("CodeGenerator: Getting improvement plan and code")
         plan, code = self.plan_and_code_query(prompt)
-        print("CodeGenerator: Improvement complete")
+        logger.debug("CodeGenerator: Improvement complete")
 
         return Node(plan=plan, code=code, parent=parent_node)
 

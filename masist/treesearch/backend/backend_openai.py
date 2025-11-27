@@ -5,9 +5,8 @@ import time
 from .utils import FunctionSpec, OutputType, opt_messages_to_list, backoff_create
 from funcy import notnone, once, select_values
 import openai
-from rich import print
 
-logger = logging.getLogger("ai-scientist")
+logger = logging.getLogger(__name__)
 
 
 OPENAI_TIMEOUT_EXCEPTIONS = (
@@ -68,7 +67,7 @@ def query(
             choice.message.tool_calls[0].function.name == func_spec.name
         ), "Function name mismatch"
         try:
-            print(f"[cyan]Raw func call response: {choice}[/cyan]")
+            logger.debug(f"Raw func call response: {choice}")
             output = json.loads(choice.message.tool_calls[0].function.arguments)
         except json.JSONDecodeError as e:
             logger.error(

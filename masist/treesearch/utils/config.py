@@ -63,6 +63,13 @@ class VLMFeedbackConfig:
 
 
 @dataclass
+class MultiSeedEvalConfig:
+    """Configuration for multi-seed evaluation"""
+    enabled: bool = False  # Disabled by default
+    num_seeds: int = 3
+
+
+@dataclass
 class ExecConfig:
     """Execution configuration"""
     timeout: int = 120  # seconds
@@ -81,6 +88,7 @@ class AgentConfig:
     feedback: FeedbackConfig = field(default_factory=FeedbackConfig)
     vlm_feedback: VLMFeedbackConfig = field(default_factory=VLMFeedbackConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
+    multi_seed_eval: MultiSeedEvalConfig = field(default_factory=MultiSeedEvalConfig)
 
 
 @dataclass

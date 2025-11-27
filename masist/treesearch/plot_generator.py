@@ -91,48 +91,108 @@ class PlotGenerator:
         ]
 
         prompt_guideline += [
+            "experiment_data structure: ",
+            """
+                # experiment_data.npz には 'scenarios' dict が含まれます。
+                # 以下の2パターンがあります：
+
+                # ========================================
+                # パターン1: 複数条件がある場合（条件比較実験）
+                # ========================================
+                experiment_data = {
+                    'scenarios': {
+                        'CONDITION_A': {
+                            'messages': [...],     # 全メッセージログ（ターン順）
+                            'events': [...],       # 重要イベント（合意成立、衝突など）
+                            'metrics': {...},      # この条件の評価指標
+                            'config': {...},       # この条件の設定
+                        },
+                        'CONDITION_B': { ... },
+                        # ... 他の条件
+                    },
+                    'metrics': {...},              # 全条件の集約メトリクス（オプション）
+                }
+
+                # ========================================
+                # パターン2: 単一条件の場合
+                # ========================================
+                experiment_data = {
+                    'scenarios': {
+                        'default': {               # キーは 'default' となる
+                            'messages': [...],
+                            'events': [...],
+                            'metrics': {...},
+                            'config': {...},
+                        },
+                    },
+                    'metrics': {...},
+                }
+            """,
             "Example data loading and plot saving code: ",
             """
-                # Discover and load data files
-                for filename in os.listdir(working_dir):
-                    if filename.endswith('.npz'):
-                        try:
-                            data = np.load(os.path.join(working_dir, filename), allow_pickle=True)
-                            for key in data.files:
-                                if data[key].ndim == 0:
-                                    all_scenarios = data[key].item()  # Extract dict from 0-d array
-                                    # Iterate over each scenario
-                                    for scenario_name, scenario_data in all_scenarios.items():
-                                        # Access aggregated_metrics
-                                        metrics = scenario_data['aggregated_metrics']
-                                        # Create plots for this scenario
-                                        try:
-                                            plt.figure()
-                                            # ... plotting code using metrics ...
-                                            plt.savefig(os.path.join(working_dir, f'{scenario_name}_plot.png'))
-                                            plt.close()
-                                        except Exception as e:
-                                            print(f"Error creating plot for {scenario_name}: {e}")
-                                            plt.close()
-                        except Exception as e:
-                            print(f'Error loading {filename}: {e}')
+                # Load experiment_data.npz
+                npz_path = os.path.join(working_dir, 'experiment_data.npz')
+                if os.path.exists(npz_path):
+                    data = np.load(npz_path, allow_pickle=True)
+                    exp_data = data['experiment_data'].item()  # Extract dict from 0-d array
 
-                    elif filename.endswith('.npy'):
-                        try:
-                            data = np.load(os.path.join(working_dir, filename), allow_pickle=True)
-                            scenario_name = filename[:-4]  # Remove .npy extension
-                            # Process 2D array data
-                            # Create plots for this scenario
+                    if 'scenarios' in exp_data:
+                        scenarios = exp_data['scenarios']
+                        is_single_condition = len(scenarios) == 1 and 'default' in scenarios
+
+                        if is_single_condition:
+                            # 単一条件の場合: 'default' シナリオのみ
+                            scenario_data = scenarios['default']
+                            metrics = scenario_data.get('metrics', {})
+                            messages = scenario_data.get('messages', [])
+                            events = scenario_data.get('events', [])
+                            config = scenario_data.get('config', {})
+
+                            # プロット作成（タイトルに 'default' は含めない）
                             try:
                                 plt.figure()
-                                # ... plotting code using data array ...
-                                plt.savefig(os.path.join(working_dir, f'{scenario_name}_plot.png'))
+                                # ... plotting code using metrics/messages/events ...
+                                plt.title('Experiment Results')  # 'default' は不要
+                                plt.savefig(os.path.join(working_dir, 'results_plot.png'))
                                 plt.close()
                             except Exception as e:
-                                print(f"Error creating plot for {scenario_name}: {e}")
+                                print(f"Error creating plot: {e}")
                                 plt.close()
-                        except Exception as e:
-                            print(f'Error loading {filename}: {e}')
+
+                        else:
+                            # 複数条件の場合: 各シナリオを比較
+                            for scenario_name, scenario_data in scenarios.items():
+                                metrics = scenario_data.get('metrics', {})
+                                messages = scenario_data.get('messages', [])
+                                events = scenario_data.get('events', [])
+                                config = scenario_data.get('config', {})
+
+                                # 各シナリオのプロット
+                                try:
+                                    plt.figure()
+                                    # ... plotting code ...
+                                    plt.title(f'{scenario_name} - Results')
+                                    plt.savefig(os.path.join(working_dir, f'{scenario_name}_plot.png'))
+                                    plt.close()
+                                except Exception as e:
+                                    print(f"Error creating plot for {scenario_name}: {e}")
+                                    plt.close()
+
+                            # 条件間比較プロット（オプション）
+                            try:
+                                plt.figure()
+                                # ... comparison plotting code ...
+                                plt.title('Scenario Comparison')
+                                plt.savefig(os.path.join(working_dir, 'scenario_comparison.png'))
+                                plt.close()
+                            except Exception as e:
+                                print(f"Error creating comparison plot: {e}")
+                                plt.close()
+
+                    # Also check top-level metrics if present
+                    if 'metrics' in exp_data:
+                        aggregated_metrics = exp_data['metrics']
+                        # Create aggregated plots if needed
             """,
         ]
 

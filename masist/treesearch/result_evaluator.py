@@ -41,7 +41,7 @@ class ResultEvaluator:
         Parse execution result and determine if the node is buggy
         Equivalent to parse_exec_result() from parallel_agent.py
         """
-        logger.info(f"Evaluator is parsing execution results for node {node.id}")
+        logger.debug(f"Evaluator is parsing execution results for node {node.id}")
 
         # Absorb execution result into node
         node.absorb_exec_result(exec_result)
@@ -125,10 +125,11 @@ class ResultEvaluator:
         node.analysis = response["summary"]
         node.is_buggy = response["is_bug"] or node.exc_type is not None
 
-        print(
-            "[red]Checking if response contains metric name and description[/red]",
-            flush=True,
-        )
-        print(response)
+        logger.debug(f"Evaluation response: {response}")
+
+        # Log bug detection
+        if node.is_buggy:
+            reason = "exception detected" if node.exc_type else "evaluation found bugs"
+            logger.warning(f"[Node {node.id[:8]}] Marked as buggy (Phase 3: {reason})")
 
         return node

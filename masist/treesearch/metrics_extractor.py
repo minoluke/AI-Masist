@@ -97,49 +97,53 @@ class MetricsExtractor:
                 "  - All code should be at the global scope or in functions that are called from the global scope",
                 "  - The script should execute immediately when run, without requiring any special entry point",
             ],
+            "experiment_data structure": [
+                "The experiment_data.npz file contains a 'scenarios' dict with the following structure:",
+                "",
+                "experiment_data = {",
+                "    'scenarios': {",
+                "        'CONDITION_A': {",
+                "            'messages': [...],     # Message logs",
+                "            'events': [...],       # Important events",
+                "            'metrics': {...},      # Metrics for this scenario",
+                "            'config': {...},       # Configuration",
+                "        },",
+                "        'CONDITION_B': { ... },",
+                "        # ... other conditions",
+                "    },",
+                "    'metrics': {...},              # Aggregated metrics (optional)",
+                "}",
+                "",
+                "For single-condition experiments, the scenario name may be 'default'.",
+            ],
             "Example data loading code": [
                 """
-                import os
-                import numpy as np
+import os
+import numpy as np
 
-                working_dir = os.path.join(os.getcwd(), 'working')
+working_dir = os.path.join(os.getcwd(), 'working')
 
-                # Example: Load .npz file with nested scenario dictionaries
-                # Structure: .npz contains "experiment_data" key, which is a 0-d array containing:
-                #   {"scenario1": {"runs": [...], "aggregated_metrics": {...}},
-                #    "scenario2": {"runs": [...], "aggregated_metrics": {...}}}
-                #
-                # for filename in os.listdir(working_dir):
-                #     if filename.endswith('.npz'):
-                #         data = np.load(os.path.join(working_dir, filename), allow_pickle=True)
-                #         for key in data.files:
-                #             if data[key].ndim == 0:
-                #                 all_scenarios = data[key].item()  # Extract dict from 0-d array
-                #                 # Now iterate over each scenario in the dict
-                #                 for scenario_name, scenario_data in all_scenarios.items():
-                #                     print(f"Scenario: {scenario_name}")
-                #                     metrics = scenario_data["aggregated_metrics"]
-                #                     # Print each metric with clear labels
-                #                     for metric_name, metric_value in metrics.items():
-                #                         print(f"{metric_name}: {metric_value}")
+# Load experiment_data.npz
+npz_path = os.path.join(working_dir, 'experiment_data.npz')
+if os.path.exists(npz_path):
+    data = np.load(npz_path, allow_pickle=True)
+    exp_data = data['experiment_data'].item()  # Extract dict from 0-d array
 
-                # Example: Load .npy file (2D numpy array)
-                # for filename in os.listdir(working_dir):
-                #     if filename.endswith('.npy'):
-                #         data = np.load(os.path.join(working_dir, filename), allow_pickle=True)
-                #         # data is a 2D array with shape (rows, columns)
-                #         # Extract scenario name from filename
-                #         scenario_name = filename[:-4]  # Remove .npy extension
-                #         print(f"Scenario: {scenario_name}")
-                #         # Calculate metrics from the array
-                #         # Example: if column 6 is 'achieved' boolean, calculate success rate
-                #         # Filter to agent_id==0 to avoid counting same round multiple times
-                #         agent0_rows = data[data[:, 3] == 0]  # Assuming column 3 is agent_id
-                #         success_rate = np.mean(agent0_rows[:, 6])  # Assuming column 6 is achieved
-                #         avg_total_contribution = np.mean(agent0_rows[:, 5])  # Assuming column 5 is total_contribution
-                #         print(f"success_rate: {success_rate}")
-                #         print(f"avg_total_contribution: {avg_total_contribution}")
-                """
+    # Check if 'scenarios' key exists (new format)
+    if 'scenarios' in exp_data:
+        for scenario_name, scenario_data in exp_data['scenarios'].items():
+            print(f"Scenario: {scenario_name}")
+            if 'metrics' in scenario_data:
+                metrics = scenario_data['metrics']
+                for metric_name, metric_value in metrics.items():
+                    print(f"{metric_name}: {metric_value}")
+
+    # Also check top-level metrics if present
+    if 'metrics' in exp_data:
+        print("Aggregated metrics:")
+        for metric_name, metric_value in exp_data['metrics'].items():
+            print(f"{metric_name}: {metric_value}")
+"""
             ],
             "Response format": self._prompt_metricparse_resp_fmt(),
         }
@@ -158,8 +162,8 @@ class MetricsExtractor:
         code = extract_code(completion_text)
         plan = extract_text_up_to_code(completion_text)
 
-        print(f"[blue]Parse metrics plan:[/blue] {plan}")
-        print(f"[blue]Parse metrics code:[/blue] {code}")
+        logger.debug(f"Parse metrics plan: {plan}")
+        logger.debug(f"Parse metrics code: {code}")
 
         return code, plan
 
@@ -170,8 +174,8 @@ class MetricsExtractor:
             "Execution Output": metrics_exec_result.term_out,
         }
 
-        print(f"[blue]Metrics_exec_result.term_out: {metrics_exec_result.term_out}[/blue]")
-        print(f"[blue]Metrics Parsing Execution Result:\n[/blue] {metrics_exec_result}")
+        logger.debug(f"Metrics_exec_result.term_out: {metrics_exec_result.term_out}")
+        logger.debug(f"Metrics Parsing Execution Result: {metrics_exec_result}")
 
         metrics_response = cast(
             dict,
@@ -184,7 +188,7 @@ class MetricsExtractor:
             ),
         )
 
-        print(f"[blue]Metrics:[/blue] {metrics_response}")
+        logger.debug(f"Metrics: {metrics_response}")
 
         if metrics_response["valid_metrics_received"]:
             node.metric = MetricValue(

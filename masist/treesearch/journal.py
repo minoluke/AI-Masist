@@ -311,7 +311,8 @@ class Journal:
         """Append a new node to the journal."""
         node.step = len(self.nodes)
         self.nodes.append(node)
-        logger.info(f"Added node {node.id} (step {node.step}) to journal")
+        buggy_status = "buggy" if node.is_buggy else "good"
+        logger.info(f"Added node {node.id[:8]} to journal (step {node.step}, {buggy_status})")
 
     @property
     def draft_nodes(self) -> List[Node]:
@@ -333,7 +334,6 @@ class Journal:
             n for n in self.nodes
             if n.is_buggy is False and n.is_buggy_plots is False
         ]
-        logger.info(f"Found {len(good)} good nodes out of {len(self.nodes)} total")
         return good
 
     def get_node_by_id(self, node_id: str) -> Optional[Node]:

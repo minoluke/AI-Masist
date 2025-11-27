@@ -11,6 +11,45 @@ from typing import Optional, Dict, Any, List
 logger = logging.getLogger(__name__)
 
 
+def _generate_exec_time_feedback(exec_time: float, timeout: int) -> str:
+    """
+    Generate feedback about execution time.
+
+    Args:
+        exec_time: Actual execution time in seconds
+        timeout: Configured timeout in seconds
+
+    Returns:
+        Feedback string or empty string if execution time is normal
+    """
+    if exec_time is None:
+        return ""
+
+    # Too fast (likely incomplete execution)
+    if exec_time < 5:
+        return (
+            "実行時間が非常に短い（5秒未満）です。"
+            "シミュレーションが正常に完了したか確認してください。"
+            "データの保存やログ出力が適切に行われているか確認してください。"
+        )
+
+    # Near timeout (>80% of timeout)
+    if exec_time > timeout * 0.8:
+        return (
+            f"実行時間がタイムアウト({timeout}秒)に近づいています（{exec_time:.1f}秒）。"
+            "max_round や max_turns を減らすか、処理を最適化することを検討してください。"
+        )
+
+    # Very long (>50% of timeout)
+    if exec_time > timeout * 0.5:
+        return (
+            f"実行時間が比較的長い（{exec_time:.1f}秒）です。"
+            "必要に応じて処理の効率化を検討してください。"
+        )
+
+    return ""
+
+
 def process_node_wrapper(
     node_data: Optional[Dict],
     task_desc: str,
@@ -40,20 +79,20 @@ def process_node_wrapper(
     from .vlm_analyzer import VLMAnalyzer
     from .utils.metric import WorstMetricValue
 
-    print("Starting process_node_wrapper")
+    logger.debug("Starting process_node_wrapper")
 
     # Create process-specific workspace
     process_id = multiprocessing.current_process().name
     workspace = os.path.join(cfg.workspace_dir, f"process_{process_id}")
     os.makedirs(workspace, exist_ok=True)
-    print(f"Process {process_id} using workspace: {workspace}")
+    logger.debug(f"Process {process_id} using workspace: {workspace}")
 
     # Create process-specific working directory
     working_dir = os.path.join(workspace, "working")
     os.makedirs(working_dir, exist_ok=True)
 
     # Create interpreter instance for worker process
-    print("Creating Interpreter")
+    logger.debug("Creating Interpreter")
     process_interpreter = Interpreter(
         working_dir=workspace,
         timeout=cfg.exec.timeout,
@@ -65,59 +104,78 @@ def process_node_wrapper(
         # Recreate parent node from node_data if provided
         if node_data:
             parent_node = Node.from_dict(node_data, journal=None)
-            print(f"Recreated parent node: {parent_node.id}")
+            logger.debug(f"Recreated parent node: {parent_node.id}")
         else:
             parent_node = None
-            print("No parent node - creating draft")
+            logger.debug("No parent node - creating draft")
 
         # ========== Phase 1: Code Generation ==========
-        print("Phase 1: Code Generation")
+        logger.debug("Phase 1: Code Generation")
         if evaluation_metrics is None:
             evaluation_metrics = []
         code_generator = CodeGenerator(task_desc, evaluation_metrics, cfg, memory_summary)
 
         if parent_node is None:
             # Draft node
-            print("Generating draft node")
+            logger.debug("Generating draft node")
             child_node = code_generator.generate()
         elif parent_node.is_buggy:
             # Debug node
-            print(f"Generating debug node for {parent_node.id}")
+            logger.debug(f"Generating debug node for {parent_node.id}")
             child_node = code_generator.generate_debug(parent_node)
         else:
             # Improve node
-            print(f"Generating improve node for {parent_node.id}")
+            logger.debug(f"Generating improve node for {parent_node.id}")
             child_node = code_generator.generate_improve(parent_node)
 
         # Set parent if provided
         if parent_node:
             child_node.parent = parent_node
 
+        # Short node ID for logging
+        node_id_short = child_node.id[:8]
+
         # ========== Phase 2: Code Execution ==========
-        print("Phase 2: Code Execution")
+        logger.info(f"[Node {node_id_short}] Phase 2: Code Execution")
         exec_result = process_interpreter.run(child_node.code, True)
         child_node.absorb_exec_result(exec_result)
         process_interpreter.cleanup_session()
 
+        # Log execution exception if any
+        if exec_result.exc_type:
+            logger.warning(f"[Node {node_id_short}] Phase 2 exception: {exec_result.exc_type}")
+            if exec_result.exc_info:
+                logger.debug(f"[Node {node_id_short}] Exception details: {exec_result.exc_info}")
+
+        # Generate execution time feedback
+        child_node.exec_time_feedback = _generate_exec_time_feedback(
+            exec_result.exec_time, cfg.exec.timeout
+        )
+        if child_node.exec_time_feedback:
+            logger.warning(f"[Node {node_id_short}] Exec time feedback: {child_node.exec_time_feedback}")
+
         # ========== Phase 3: Result Evaluation ==========
-        print("Phase 3: Result Evaluation")
+        logger.info(f"[Node {node_id_short}] Phase 3: Result Evaluation")
         evaluator = ResultEvaluator(task_desc, cfg)
         evaluator.evaluate(child_node, exec_result, working_dir)
 
         # ========== Phase 4: Metrics Extraction ==========
-        print("Phase 4: Metrics Extraction")
+        # Note: AI-Scientist-v2 does NOT skip this phase even if is_buggy=True
+        # Metrics may still be extractable even if the simulation had logical bugs
+        logger.info(f"[Node {node_id_short}] Phase 4: Metrics Extraction")
         metrics_extractor = MetricsExtractor(cfg, process_interpreter)
 
         # Check for saved data files
         data_files = [f for f in os.listdir(working_dir) if f.endswith(".npy") or f.endswith(".npz")]
         if not data_files:
-            logger.warning("No .npy/.npz files found. Setting metric to WorstMetricValue")
+            logger.warning(f"[Node {node_id_short}] Marked as buggy (Phase 4: no .npy/.npz files)")
             child_node.metric = WorstMetricValue()
             child_node.is_buggy = True
         else:
             try:
                 metrics_extractor.extract(child_node, working_dir)
             except Exception as e:
+                logger.warning(f"[Node {node_id_short}] Marked as buggy (Phase 4: metrics extraction error)")
                 logger.error(f"Error extracting metrics: {str(e)}")
                 child_node.metric = WorstMetricValue()
                 child_node.is_buggy = True
@@ -126,7 +184,7 @@ def process_node_wrapper(
         # ========== Phase 5: Plot Generation ==========
         # Only generate plots if experiment was successful
         if not child_node.is_buggy:
-            print("Phase 5: Plot Generation")
+            logger.info(f"[Node {node_id_short}] Phase 5: Plot Generation")
             plot_generator = PlotGenerator(cfg, process_interpreter)
 
             try:
@@ -154,41 +212,43 @@ def process_node_wrapper(
                 exp_code_path = exp_results_dir / "experiment_code.py"
                 with open(exp_code_path, "w") as f:
                     f.write(child_node.code)
-                logger.info(f"Saved experiment code to {exp_code_path}")
+                logger.debug(f"Saved experiment code to {exp_code_path}")
 
-                # Move experiment data files
+                # Move experiment data files (.npy and .npz)
                 plots_dir = Path(working_dir)
-                for exp_data_file in plots_dir.glob("*.npy"):
+                for exp_data_file in plots_dir.glob("*.np[yz]"):
                     exp_data_path = exp_results_dir / exp_data_file.name
                     exp_data_file.resolve().rename(exp_data_path)
-                    logger.info(f"Saved experiment data to {exp_data_path}")
+                    logger.debug(f"Saved experiment data to {exp_data_path}")
 
             except Exception as e:
-                logger.error(f"Error generating plots: {str(e)}")
+                logger.warning(f"[Node {node_id_short}] Plot generation failed (Phase 5)")
+                logger.error(f"[Node {node_id_short}] Error: {str(e)}")
 
         # ========== Phase 6: VLM Analysis ==========
         if not child_node.is_buggy and child_node.plots:
-            print("Phase 6: VLM Analysis")
+            logger.info(f"[Node {node_id_short}] Phase 6: VLM Analysis")
             vlm_analyzer = VLMAnalyzer(task_desc, cfg)
 
             try:
                 vlm_analyzer.analyze(child_node)
-                logger.info(f"Generated VLM analysis for node {child_node.id}")
+                logger.debug(f"Generated VLM analysis for node {child_node.id}")
             except Exception as e:
-                logger.error(f"Error analyzing plots: {str(e)}")
+                logger.warning(f"[Node {node_id_short}] VLM analysis failed (Phase 6)")
+                logger.error(f"[Node {node_id_short}] Error: {str(e)}")
 
         # ========== Return Result ==========
-        print("Converting result to dict")
+        logger.debug("Converting result to dict")
         result_data = child_node.to_dict()
-        print(f"Result data keys: {result_data.keys()}")
-        print(f"Result data size: {len(str(result_data))} chars")
-        print("Returning result")
+        logger.debug(f"Result data keys: {result_data.keys()}")
+        logger.debug(f"Result data size: {len(str(result_data))} chars")
+        logger.debug("Returning result")
         return result_data
 
     except Exception as e:
-        print(f"Worker process error: {str(e)}")
+        logger.error(f"Worker process error: {str(e)}")
         import traceback
-        traceback.print_exc()
+        logger.error(traceback.format_exc())
         raise
     finally:
         if 'process_interpreter' in locals() and process_interpreter:

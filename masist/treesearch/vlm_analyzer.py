@@ -31,7 +31,7 @@ class VLMAnalyzer:
             return
 
         logger.info(f"Analyzing {len(node.plot_paths)} plots for node {node.id}")
-        print(f"[cyan]Plot paths:[/cyan] {node.plot_paths}")
+        logger.debug(f"Plot paths: {node.plot_paths}")
 
         # Step 1: Select plots if there are too many (>10)
         selected_plots = self._select_plots(node)
@@ -51,9 +51,7 @@ class VLMAnalyzer:
             ),
         )
 
-        print(
-            f"[cyan]VLM response from {self.cfg.agent.vlm_feedback.model}:[/cyan] {response}"
-        )
+        logger.debug(f"VLM response from {self.cfg.agent.vlm_feedback.model}: {response}")
 
         # Step 4: Store analysis results in node
         if response["valid_plots_received"]:
@@ -81,10 +79,6 @@ class VLMAnalyzer:
         logger.warning(
             f"{len(node.plot_paths)} plots received, calling LLM to select 10 most relevant"
         )
-        print(
-            f"[red]Warning: {len(node.plot_paths)} plots received, this may be too many to analyze effectively. "
-            f"Calling LLM to select the most relevant plots to analyze.[/red]"
-        )
 
         # Prompt LLM to select 10 plots
         prompt_select_plots = {
@@ -110,7 +104,7 @@ class VLMAnalyzer:
                 ),
             )
 
-            print(f"[cyan]Plot selection response:[/cyan] {response_select_plots}")
+            logger.debug(f"Plot selection response: {response_select_plots}")
             selected_plots = response_select_plots.get("selected_plots", [])
 
             # Validate that all paths exist and are image files
@@ -126,7 +120,7 @@ class VLMAnalyzer:
                     logger.warning(f"Invalid plot path received: {plot_path}")
 
             if valid_plots:
-                print(f"[cyan]Selected valid plots:[/cyan] {valid_plots}")
+                logger.debug(f"Selected valid plots: {valid_plots}")
                 return valid_plots
             else:
                 logger.warning(
@@ -154,7 +148,7 @@ class VLMAnalyzer:
 
     def _build_vlm_message(self, selected_plots: list[str]) -> list[dict]:
         """Build VLM message with text prompt and base64-encoded images"""
-        print("[cyan]Encoding images to base64[/cyan]")
+        logger.debug("Encoding images to base64")
 
         user_message = [
             {
