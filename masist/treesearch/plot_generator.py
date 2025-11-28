@@ -90,6 +90,48 @@ class PlotGenerator:
             "Use the following experiment code to infer the data to plot: " + node.code,
         ]
 
+        # MAS特有のプロットガイドライン
+        prompt_guideline += [
+            "",
+            "=== TIME-SERIES DATA PLOTTING ===",
+            "If any metrics or logs include temporal sequences (e.g., lists/arrays whose length equals the number of rounds or time steps),",
+            "always generate time-series plots for them. Common patterns include:",
+            "  - adoption_rate[t], cooperation_rate[t] → line plot over time",
+            "  - agent_state[t][agent_id] → aggregated line plot (mean ± std)",
+            "  - reward[t], entropy[t], utility[t] → evolution curves",
+            "  - message_count[t], interaction_count[t] → temporal bar or line plot",
+            "Detection: Check if any value is a list/array with len > 1. If so, treat as time-series.",
+            "",
+            "=== AGENT-LEVEL DATA AGGREGATION ===",
+            "If the number of agents > 20, NEVER plot individual curves for all agents.",
+            "Instead, apply one of these strategies:",
+            "  - Plot the MEAN curve with shaded area for standard deviation or confidence interval",
+            "  - Plot histogram/distribution of final agent states",
+            "  - Sample at most 5 representative agents for visualization (e.g., min, max, median, random 2)",
+            "For agent-level metrics (e.g., agent_payoff, agent_contribution), always compute and plot:",
+            "  - Mean and std across agents per round (if temporal)",
+            "  - Final distribution (histogram) across all agents",
+            "",
+            "=== NETWORK STRUCTURE PLOTTING ===",
+            "If a scenario contains network information (e.g., adjacency_matrix, edges, nodes, graph),",
+            "generate network-related visualizations:",
+            "  - Degree distribution: histogram of node degrees",
+            "  - Network size over time: if network evolves (temporal), plot node/edge count",
+            "  - Cluster size distribution: if clustering info is available",
+            "  - DO NOT attempt to draw the full network graph if nodes > 50 (too cluttered)",
+            "  - For small networks (nodes <= 50), use networkx for visualization if available",
+            "",
+            "=== EVENT LOG PLOTTING ===",
+            "If 'events' list is non-empty, analyze and visualize:",
+            "  - If events contain timestamps/rounds: produce event timeline plot (scatter or vertical lines on time axis)",
+            "  - If events contain categories/types: count occurrences and produce bar chart",
+            "  - Common event types: 'agreement', 'conflict', 'phase_change', 'punishment', 'reward'",
+            "Example event structure: {'round': 5, 'type': 'agreement', 'agents': [0, 1]}",
+            "  → Count events by type, plot as bar chart",
+            "  → Plot event occurrences on timeline (x=round, y=event_type)",
+            "",
+        ]
+
         prompt_guideline += [
             "experiment_data structure: ",
             """

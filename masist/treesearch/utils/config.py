@@ -44,7 +44,7 @@ class SearchConfig:
 @dataclass
 class CodeConfig:
     """Configuration for code generation LLM"""
-    model: str = "gpt-4o-mini"
+    model: str = "deepseek-chat"
     temp: float = 1.0
 
 

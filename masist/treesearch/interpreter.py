@@ -20,7 +20,7 @@ from pathlib import Path
 import humanize
 from dataclasses_json import DataClassJsonMixin
 
-logger = logging.getLogger("ai-scientist")
+logger = logging.getLogger("ai-masist")
 
 
 @dataclass
