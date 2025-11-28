@@ -36,10 +36,17 @@ class MetricsExtractor:
             return
 
         try:
-            # Step 1: Generate parse code
-            parse_metrics_code, parse_metrics_plan = self._generate_parse_code(node)
-            node.parse_metrics_code = parse_metrics_code
-            node.parse_metrics_plan = parse_metrics_plan
+            # Step 1: Generate parse code (or reuse from parent if already set)
+            if node.parse_metrics_code:
+                # Reuse existing parse code (seed_eval mode)
+                logger.debug("Reusing existing parse_metrics_code from parent node")
+                parse_metrics_code = node.parse_metrics_code
+                parse_metrics_plan = node.parse_metrics_plan
+            else:
+                # Generate new parse code
+                parse_metrics_code, parse_metrics_plan = self._generate_parse_code(node)
+                node.parse_metrics_code = parse_metrics_code
+                node.parse_metrics_plan = parse_metrics_plan
 
             # Step 2: Execute parse code
             metrics_exec_result = self.interpreter.run(parse_metrics_code, True)

@@ -56,6 +56,7 @@ def process_node_wrapper(
     cfg: Any,
     evaluation_metrics: list = None,
     memory_summary: Optional[str] = None,
+    seed_eval: bool = False,
 ) -> Dict:
     """
     Wrapper function that processes a single node through all phases.
@@ -66,6 +67,8 @@ def process_node_wrapper(
         cfg: Configuration object
         evaluation_metrics: List of evaluation metrics
         memory_summary: Optional memory summary for context
+        seed_eval: If True, skip Phase 1 and use parent node's code directly
+                   (for multi-seed evaluation)
 
     Returns:
         Dict representation of the processed node
@@ -110,27 +113,43 @@ def process_node_wrapper(
             logger.debug("No parent node - creating draft")
 
         # ========== Phase 1: Code Generation ==========
-        logger.debug("Phase 1: Code Generation")
         if evaluation_metrics is None:
             evaluation_metrics = []
-        code_generator = CodeGenerator(task_desc, evaluation_metrics, cfg, memory_summary)
 
-        if parent_node is None:
-            # Draft node
-            logger.debug("Generating draft node")
-            child_node = code_generator.generate()
-        elif parent_node.is_buggy:
-            # Debug node
-            logger.debug(f"Generating debug node for {parent_node.id}")
-            child_node = code_generator.generate_debug(parent_node)
+        if seed_eval and parent_node is not None:
+            # Seed evaluation: skip code generation, use parent node's code directly
+            # Also reuse parse_metrics_code and plot_code from parent (AI-Scientist-v2 pattern)
+            logger.debug("Phase 1: Skipped (seed_eval mode)")
+            child_node = Node(
+                plan="Seed evaluation node",
+                code=parent_node.code,
+                plot_code=parent_node.plot_code,
+                parse_metrics_code=parent_node.parse_metrics_code,
+                parse_metrics_plan=parent_node.parse_metrics_plan,
+                parent=parent_node,
+                is_seed_node=True,
+            )
         else:
-            # Improve node
-            logger.debug(f"Generating improve node for {parent_node.id}")
-            child_node = code_generator.generate_improve(parent_node)
+            # Normal flow: generate new code
+            logger.debug("Phase 1: Code Generation")
+            code_generator = CodeGenerator(task_desc, evaluation_metrics, cfg, memory_summary)
 
-        # Set parent if provided
-        if parent_node:
-            child_node.parent = parent_node
+            if parent_node is None:
+                # Draft node
+                logger.debug("Generating draft node")
+                child_node = code_generator.generate()
+            elif parent_node.is_buggy:
+                # Debug node
+                logger.debug(f"Generating debug node for {parent_node.id}")
+                child_node = code_generator.generate_debug(parent_node)
+            else:
+                # Improve node
+                logger.debug(f"Generating improve node for {parent_node.id}")
+                child_node = code_generator.generate_improve(parent_node)
+
+            # Set parent if provided
+            if parent_node:
+                child_node.parent = parent_node
 
         # Short node ID for logging
         node_id_short = child_node.id[:8]

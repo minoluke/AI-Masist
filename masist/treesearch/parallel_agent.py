@@ -274,38 +274,27 @@ class ParallelAgent:
 
     def _run_multi_seed_evaluation(self, node: Node) -> List[Node]:
         """
-        Run multiple seeds of the same node to get statistical metrics.
-        Returns a list of nodes with different random seeds.
+        Run multiple evaluations of the same node to get statistical metrics.
+        Returns a list of nodes that executed the same code.
+
+        Note: Since MAS simulations use LLM-based agents, the results will vary
+        even with the same code due to LLM non-determinism.
         """
         from .node_processor import process_node_wrapper
 
         num_seeds = self.cfg.agent.multi_seed_eval.num_seeds
-        node_code = node.code
 
-        logger.info(f"Starting multi-seed evaluation with {num_seeds} seeds...")
+        logger.info(f"Starting multi-seed evaluation with {num_seeds} runs...")
 
-        # Submit parallel jobs for different seeds
+        # Submit parallel jobs
         seed_nodes = []
         futures = []
 
-        for seed in range(num_seeds):
-            # Create seed-injected code
-            seed_code = (
-                f"# Set random seed\n"
-                f"import random\n"
-                f"import numpy as np\n"
-                f"\n"
-                f"seed = {seed}\n"
-                f"random.seed(seed)\n"
-                f"np.random.seed(seed)\n"
-                f"\n"
-            ) + node_code
-
-            # Create node data with seed-injected code
+        for i in range(num_seeds):
+            # Use parent node's code directly (seed_eval=True skips Phase 1)
             node_data = node.to_dict()
-            node_data["code"] = seed_code
 
-            logger.debug(f"Submitting seed {seed} evaluation...")
+            logger.debug(f"Submitting evaluation run {i}...")
             futures.append(
                 self.executor.submit(
                     process_node_wrapper,
@@ -314,6 +303,7 @@ class ParallelAgent:
                     self.cfg,
                     self.evaluation_metrics,
                     "",  # memory_summary
+                    True,  # seed_eval=True: skip Phase 1, use parent's code
                 )
             )
 
@@ -326,9 +316,9 @@ class ParallelAgent:
                 result_node.parent = node
                 self.journal.append(result_node)
                 seed_nodes.append(result_node)
-                logger.debug(f"Seed {i} evaluation complete: node {result_node.id}")
+                logger.debug(f"Evaluation run {i} complete: node {result_node.id}")
             except Exception as e:
-                logger.error(f"Error in multi-seed evaluation seed {i}: {str(e)}")
+                logger.error(f"Error in multi-seed evaluation run {i}: {str(e)}")
 
         return seed_nodes
 

@@ -12,7 +12,7 @@ import backoff
 import logging
 from typing import Callable
 
-logger = logging.getLogger("ai-scientist")
+logger = logging.getLogger("ai-masist")
 
 
 def wrap_code(code: str, lang: str = "python") -> str:

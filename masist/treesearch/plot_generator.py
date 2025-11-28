@@ -27,10 +27,16 @@ class PlotGenerator:
         Generate plotting code and execute it with retry mechanism
         Combines _generate_plotting_code() and plot execution logic
         """
-        # Step 1: Generate plotting code
-        plotting_code = self._generate_plotting_code(
-            node, working_dir, plot_code_from_prev_stage
-        )
+        # Step 1: Generate plotting code (or reuse from parent if already set)
+        if node.plot_code:
+            # Reuse existing plot code (seed_eval mode)
+            logger.debug("Reusing existing plot_code from parent node")
+            plotting_code = node.plot_code
+        else:
+            # Generate new plot code
+            plotting_code = self._generate_plotting_code(
+                node, working_dir, plot_code_from_prev_stage
+            )
 
         # Step 2: Execute plotting code with retry (max 3 attempts)
         retry_count = 0
