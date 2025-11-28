@@ -31,8 +31,9 @@ logger = logging.getLogger(__name__)
 llm_config = {
     "config_list": [
         {
-            "model": "gpt-4o-mini",
-            "api_key": os.environ.get("OPENAI_API_KEY"),
+            "model": "deepseek-chat",
+            "api_key": os.environ.get("DEEPSEEK_API_KEY"),
+            "base_url": "https://api.deepseek.com",
         }
     ],
     "temperature": 0.7,

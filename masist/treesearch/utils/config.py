@@ -51,7 +51,7 @@ class CodeConfig:
 @dataclass
 class FeedbackConfig:
     """Configuration for feedback LLM"""
-    model: str = "gpt-4o-mini"
+    model: str = "deepseek-chat"
     temp: float = 0.3
 
 
