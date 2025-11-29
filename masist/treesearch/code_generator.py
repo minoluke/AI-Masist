@@ -29,11 +29,20 @@ class CodeGenerator:
         self.ag2_reference = self._load_ag2_reference()
 
     def _load_ag2_reference(self) -> str:
-        """Load AG2 quick reference document"""
+        """Load AG2 quick reference document and replace placeholders with config values"""
         doc_path = os.path.join(os.path.dirname(__file__), "..", "docs", "AG2_QUICK_REFERENCE.md")
         try:
             with open(doc_path, "r", encoding="utf-8") as f:
-                return f.read()
+                content = f.read()
+
+            # テンプレートプレースホルダーを設定値で置換
+            agent_sim_cfg = self.cfg.agent.agent_simulation
+            content = content.replace("{{AGENT_SIMULATION_MODEL}}", agent_sim_cfg.model)
+            content = content.replace("{{AGENT_SIMULATION_API_KEY_ENV}}", agent_sim_cfg.api_key_env)
+            content = content.replace("{{AGENT_SIMULATION_BASE_URL}}", agent_sim_cfg.base_url)
+            content = content.replace("{{AGENT_SIMULATION_TIMEOUT}}", str(agent_sim_cfg.timeout))
+
+            return content
         except FileNotFoundError:
             logger.warning(f"AG2 reference document not found at {doc_path}")
             return ""
@@ -191,6 +200,10 @@ class CodeGenerator:
             "",
             "【Autogen 依存について】",
             "  - Autogen および LLM API キーが環境に存在する前提で、コードは単一ファイルとして成立すべき。",
+            "",
+            "【LLM設定 ※必須※】",
+            "  - AG2 API Reference セクションに記載された llm_config を**そのままコピー**して使用すること。",
+            "  - モデル名、API キー環境変数名、base_url を**絶対に変更しないこと**。",
         ]
 
         return {"Implementation guideline": impl_guideline}

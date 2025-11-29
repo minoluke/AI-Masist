@@ -1,7 +1,15 @@
 """Backend module for LLM integrations"""
 
+import logging
+import os
+
 from . import backend_anthropic, backend_openai
 from .utils import FunctionSpec, OutputType, PromptType, compile_prompt_to_md
+
+logger = logging.getLogger(__name__)
+
+# 環境変数でAPI呼び出しログを制御 (デフォルト: 有効)
+LOG_API_CALLS = os.environ.get("MASIST_LOG_API_CALLS", "1") == "1"
 
 
 def get_ai_client(model: str, **model_kwargs):
@@ -66,6 +74,15 @@ def query(
         model_kwargs.pop("temperature", None)
     else:
         model_kwargs["max_tokens"] = max_tokens
+
+    # API呼び出しログ
+    if LOG_API_CALLS:
+        if "deepseek" in model.lower():
+            logger.info(f"[API] DeepSeek ({model})")
+        elif "claude-" in model:
+            logger.info(f"[API] Anthropic ({model})")
+        else:
+            logger.info(f"[API] OpenAI ({model})")
 
     query_func = backend_anthropic.query if "claude-" in model else backend_openai.query
     output, req_time, in_tok_count, out_tok_count, info = query_func(

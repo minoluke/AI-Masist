@@ -31,13 +31,13 @@ logger = logging.getLogger(__name__)
 llm_config = {
     "config_list": [
         {
-            "model": "deepseek-chat",
-            "api_key": os.environ.get("DEEPSEEK_API_KEY"),
-            "base_url": "https://api.deepseek.com",
+            "model": "{{AGENT_SIMULATION_MODEL}}",
+            "api_key": os.environ.get("{{AGENT_SIMULATION_API_KEY_ENV}}"),
+            "base_url": "{{AGENT_SIMULATION_BASE_URL}}",
         }
     ],
     "temperature": 0.7,
-    "timeout": 120,
+    "timeout": {{AGENT_SIMULATION_TIMEOUT}},
 }
 ```
 

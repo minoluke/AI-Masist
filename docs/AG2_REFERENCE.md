@@ -58,7 +58,7 @@ llm_config = {
         }
     ],
     "temperature": 0.7,
-    "timeout": 120,
+    "timeout": 300,
 }
 
 # 方法2: 設定ファイルから読み込み（OAI_CONFIG_LIST）

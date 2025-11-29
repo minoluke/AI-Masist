@@ -70,9 +70,18 @@ class MultiSeedEvalConfig:
 
 
 @dataclass
+class AgentSimulationConfig:
+    """Configuration for generated agent simulation code (AG2 agents)"""
+    model: str = "deepseek-chat"
+    api_key_env: str = "DEEPSEEK_API_KEY"  # 環境変数名
+    base_url: str = "https://api.deepseek.com"  # OpenAI互換APIのベースURL（空ならデフォルト）
+    timeout: int = 300
+
+
+@dataclass
 class ExecConfig:
     """Execution configuration"""
-    timeout: int = 120  # seconds
+    timeout: int = 600  # seconds (10 minutes)
     num_gpus: int = 0
     format_tb_ipython: bool = True
     agent_file_name: str = "agent.py"
@@ -89,6 +98,7 @@ class AgentConfig:
     vlm_feedback: VLMFeedbackConfig = field(default_factory=VLMFeedbackConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
     multi_seed_eval: MultiSeedEvalConfig = field(default_factory=MultiSeedEvalConfig)
+    agent_simulation: AgentSimulationConfig = field(default_factory=AgentSimulationConfig)
 
 
 @dataclass

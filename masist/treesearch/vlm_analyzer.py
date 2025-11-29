@@ -174,7 +174,8 @@ class VLMAnalyzer:
                     {
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:image/jpeg;base64,{encoded_image}"
+                            "url": f"data:image/jpeg;base64,{encoded_image}",
+                            "detail": "low",  # 固定85トークン/画像でコスト削減
                         },
                     }
                 )
