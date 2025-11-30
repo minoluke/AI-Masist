@@ -14,6 +14,7 @@ import json
 from dataclasses_json import DataClassJsonMixin
 from .utils.execution_result import ExecutionResult
 from .utils.metric import MetricValue, WorstMetricValue
+from .backend import FunctionSpec, query
 
 from rich import print
 
@@ -23,7 +24,6 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-# Simplified helper functions
 def trim_long_string(s: str, max_len: int = 1000) -> str:
     """Trim long strings for display"""
     if len(s) > max_len:
@@ -31,9 +31,32 @@ def trim_long_string(s: str, max_len: int = 1000) -> str:
     return s
 
 
-def query(*args, **kwargs):
-    """Placeholder for query function - not used in basic version"""
-    raise NotImplementedError("query function not implemented in simplified version")
+node_selection_spec = FunctionSpec(
+    name="select_best_implementation",
+    description="Select the best implementation based on hypothesis validation and scientific soundness",
+    json_schema={
+        "type": "object",
+        "properties": {
+            "selected_id": {
+                "type": "string",
+                "description": "ID of the selected best implementation",
+            },
+            "reasoning": {
+                "type": "string",
+                "description": "Detailed explanation of why this implementation was chosen",
+            },
+            "hypothesis_validation": {
+                "type": "string",
+                "description": "How well does this implementation validate or refute the hypothesis? Describe what evidence it provides.",
+            },
+            "scientific_soundness": {
+                "type": "integer",
+                "description": "1-5 score for scientific rigor (1=poor, 5=excellent). Consider: proper experimental conditions, meaningful comparisons, reproducibility.",
+            },
+        },
+        "required": ["selected_id", "reasoning", "hypothesis_validation", "scientific_soundness"],
+    },
+)
 
 
 @dataclass(eq=False)
@@ -262,7 +285,7 @@ class Node(DataClassJsonMixin):
         }
 
     @classmethod
-    def from_dict(cls, data: Dict, journal: Optional[Any] = None) -> "Node":
+    def from_dict(cls, data: Dict, journal: Optional[Journal] = None) -> "Node":
         """Create a Node from a dictionary, optionally linking to journal for relationships"""
         parent_id = data.pop("parent_id", None)
         children = data.pop("children", [])
@@ -294,11 +317,41 @@ class Node(DataClassJsonMixin):
         return node
 
 
+@dataclass
+class InteractiveSession(DataClassJsonMixin):
+    """
+    A collection of nodes for an interaction session
+    (when the agent interacts with a Jupyter notebook-like interface).
+    """
+
+    nodes: list[Node] = field(default_factory=list)
+    completed: bool = False
+
+    def append(self, node: Node) -> None:
+        node.step = len(self.nodes)
+        self.nodes.append(node)
+
+    def generate_nb_trace(self, include_prompt, comment_headers=True) -> str:
+        """Generate a trace of the interactive session in IPython format."""
+        trace = []
+        header_prefix = "## " if comment_headers else ""
+        for n in self.nodes:
+            trace.append(f"\n{header_prefix}In [{n.step+1}]:\n")
+            trace.append(n.code)
+            trace.append(f"\n{header_prefix}Out [{n.step+1}]:\n")
+            trace.append(n.term_out)
+
+        if include_prompt and self.nodes:
+            trace.append(f"\n{header_prefix}In [{self.nodes[-1].step+2}]:\n")
+
+        return "\n".join(trace).strip()
+
+
+@dataclass
 class Journal:
     """A collection of nodes representing the solution tree."""
 
-    def __init__(self):
-        self.nodes: List[Node] = []
+    nodes: list[Node] = field(default_factory=list)
 
     def __getitem__(self, idx: int) -> Node:
         return self.nodes[idx]
@@ -311,30 +364,36 @@ class Journal:
         """Append a new node to the journal."""
         node.step = len(self.nodes)
         self.nodes.append(node)
-        buggy_status = "buggy" if node.is_buggy else "good"
-        logger.info(f"Added node {node.id[:8]} to journal (step {node.step}, {buggy_status})")
 
     @property
-    def draft_nodes(self) -> List[Node]:
-        """Return a list of nodes representing initial coding drafts"""
+    def draft_nodes(self) -> list[Node]:
+        """Return a list of nodes representing intial coding drafts"""
         return [n for n in self.nodes if n.parent is None]
 
     @property
-    def buggy_nodes(self) -> List[Node]:
+    def buggy_nodes(self) -> list[Node]:
         """Return a list of nodes that are considered buggy by the agent."""
         return [n for n in self.nodes if n.is_buggy]
 
     @property
-    def good_nodes(self) -> List[Node]:
-        """
-        Return a list of nodes that are not considered buggy.
-        Good nodes: is_buggy=False AND is_buggy_plots=False
-        """
-        good = [
-            n for n in self.nodes
-            if n.is_buggy is False and n.is_buggy_plots is False
+    def good_nodes(self) -> list[Node]:
+        """Return a list of nodes that are not considered buggy by the agent."""
+        list_of_nodes = [
+            [
+                n.step,
+                n.parent.step if n.parent else None,
+                n.id,
+                n.is_buggy,
+                n.is_buggy_plots,
+            ]
+            for n in self.nodes
         ]
-        return good
+        print(
+            f"[purple]all nodes ID and is_buggy/is_buggy_plots flags: {list_of_nodes}[/purple]"
+        )
+        return [
+            n for n in self.nodes if n.is_buggy is False and n.is_buggy_plots is False
+        ]
 
     def get_node_by_id(self, node_id: str) -> Optional[Node]:
         """Get a node by its ID."""
@@ -343,88 +402,218 @@ class Journal:
                 return node
         return None
 
-    def get_metric_history(self) -> List[MetricValue]:
+    def get_metric_history(self) -> list[MetricValue]:
         """Return a list of all metric values in the journal."""
-        return [n.metric for n in self.nodes if n.metric is not None]
+        return [n.metric for n in self.nodes]
 
-    def get_best_node(self, only_good: bool = True) -> Optional[Node]:
+    def get_best_node(
+        self,
+        only_good=True,
+        use_val_metric_only=False,
+        cfg=None,
+        task_desc=None,
+    ) -> None | Node:
         """
         Return the best solution found so far.
 
         Args:
-            only_good: If True, only consider good nodes (is_buggy=False)
-
-        Returns:
-            Best node based on metric comparison, or None if no valid nodes
+            only_good: If True, only consider non-buggy nodes
+            use_val_metric_only: If True, use only validation metric for selection
+            cfg: Configuration object
+            task_desc: Experiment description including hypothesis and goals
         """
         if only_good:
-            candidates = self.good_nodes
-            if not candidates:
-                logger.warning("No good nodes found in journal")
+            nodes = self.good_nodes
+            if not nodes:
                 return None
         else:
-            candidates = self.nodes
+            nodes = self.nodes
 
-        if len(candidates) == 0:
-            return None
+        if use_val_metric_only:
+            return max(nodes, key=lambda n: n.metric)
 
-        if len(candidates) == 1:
-            return candidates[0]
+        if len(nodes) == 1:
+            return nodes[0]
+
+        # Create evaluation prompt for LLM with hypothesis validation focus
+        prompt = {
+            "Introduction": (
+                "You are an experienced researcher evaluating different implementations "
+                "of a multi-agent simulation experiment. Your goal is to select the implementation "
+                "that best validates or refutes the experimental hypothesis with scientific rigor."
+            ),
+            "Experiment Goal": task_desc if task_desc else "Not specified",
+            "Evaluation Criteria": (
+                "1. Does the implementation correctly test the hypothesis?\n"
+                "2. Are the experimental conditions (e.g., rule variations) properly implemented?\n"
+                "3. Do the results provide clear evidence for or against the hypothesis?\n"
+                "4. Is the code scientifically sound with proper comparisons?\n"
+                "5. Are the metrics meaningful for evaluating the hypothesis?"
+            ),
+            "Task": (
+                "Select the best implementation from the candidates below. "
+                "Focus on which implementation best serves the experimental goals, "
+                "not just which has the highest metric value."
+            ),
+            "Candidates": "",
+        }
+
+        # Gather detailed info about each node
+        for node in nodes:
+            if not node.is_seed_node:
+                candidate_info = f"\n--- Candidate ID: {node.id} ---\n"
+                candidate_info += f"Design Plan: {node.plan}\n"
+                candidate_info += f"Code (first 1500 chars):\n{trim_long_string(node.code, 1500)}\n"
+                candidate_info += f"Metric: {str(node.metric) if node.metric else 'N/A'}\n"
+                if node.vlm_feedback_summary:
+                    candidate_info += f"VLM Feedback: {node.vlm_feedback_summary}\n"
+                if node.analysis:
+                    candidate_info += f"Analysis: {node.analysis}\n"
+                prompt["Candidates"] += candidate_info
 
         try:
-            best = max(candidates, key=lambda n: n.metric if n.metric else float('-inf'))
-            logger.info(f"Selected node {best.id} as best (metric: {best.metric})")
-            return best
+            if cfg is None or cfg.agent.get("select_node", None) is None:
+                model = "deepseek-chat"
+                temperature = 0.3
+            else:
+                model = cfg.agent.select_node.model
+                temperature = cfg.agent.select_node.temp
+            selection = query(
+                system_message=prompt,
+                user_message=None,
+                func_spec=node_selection_spec,
+                model=model,
+                temperature=temperature
+            )
+
+            # Find and return the selected node
+            selected_node = next(
+                (node for node in nodes if str(node.id) == selection["selected_id"]),
+                None,
+            )
+            if selected_node:
+                logger.warning(
+                    f"Selected node {selected_node.id} as best implementation"
+                )
+                logger.warning(f"Reasoning: {selection['reasoning']}")
+                logger.warning(f"Hypothesis Validation: {selection.get('hypothesis_validation', 'N/A')}")
+                logger.warning(f"Scientific Soundness: {selection.get('scientific_soundness', 'N/A')}/5")
+                return selected_node
+            else:
+                logger.warning("Falling back to metric-based selection")
+                return max(nodes, key=lambda n: n.metric)
+
         except Exception as e:
-            logger.error(f"Error selecting best node: {e}")
-            return candidates[0]
+            logger.error(f"Error in LLM selection process: {e}")
+            logger.warning("Falling back to metric-based selection")
+            return max(nodes, key=lambda n: n.metric)
 
-    def generate_summary(self, include_code: bool = False) -> str:
-        """
-        Generate a summary of the research progress.
-
-        Args:
-            include_code: If True, include code snippets in summary
-
-        Returns:
-            Summary string for LLM context
-        """
+    def generate_summary(self, include_code: bool = False, **model_kwargs) -> str:
+        """Generate a summary of the research progress using LLM, including both successes and failures."""
         if not self.nodes:
             return "No experiments conducted yet."
 
-        summary_parts = []
-
-        if self.good_nodes:
-            summary_parts.append("=== Successful Experiments ===")
-            for node in self.good_nodes:
-                summary_parts.append(f"Node {node.id}:")
-                summary_parts.append(f"  Plan: {node.plan}")
-                if node.metric:
-                    summary_parts.append(f"  Metric: {node.metric}")
-                if node.analysis:
-                    summary_parts.append(f"  Analysis: {node.analysis}")
-                if include_code:
-                    summary_parts.append(f"  Code: {node.code[:200]}...")
-                summary_parts.append("")
-
-        if self.buggy_nodes:
-            summary_parts.append("=== Failed Experiments ===")
-            for node in self.buggy_nodes[:5]:
-                summary_parts.append(f"Node {node.id}:")
-                if node.plan:
-                    summary_parts.append(f"  Plan: {node.plan}")
-                if node.exc_type:
-                    summary_parts.append(f"  Error: {node.exc_type}")
-                if node.analysis:
-                    summary_parts.append(f"  Analysis: {node.analysis}")
-                summary_parts.append("")
-
-        summary_parts.append(f"Total nodes: {len(self.nodes)}, Good nodes: {len(self.good_nodes)}, Buggy nodes: {len(self.buggy_nodes)}")
-
-        return "\n".join(summary_parts)
-
-    def to_dict(self) -> dict:
-        """Convert journal to a JSON-serializable dictionary"""
-        return {
-            "nodes": [node.to_dict() for node in self.nodes]
+        prompt = {
+            "Introduction": (
+                "You are an AI researcher summarizing experimental progress. "
+                "Please analyze both successful and failed experiments to provide insights "
+                "for future improvements."
+            ),
+            "Successful Experiments": "",
+            "Failed Experiments": "",
         }
+
+        for node in self.good_nodes:
+            exp_info = f"Design: {node.plan}\n  "
+            exp_info += f"Results: {node.analysis}\n"
+            exp_info += f"Metric: {str(node.metric)}\n"
+            if include_code:
+                exp_info += f"Code: {node.code}\n"
+            prompt["Successful Experiments"] += exp_info
+
+        for node in self.buggy_nodes:
+            failure_info = f"Design: {node.plan}\n  "
+            failure_info += f"Error Analysis: {node.analysis}\n"
+            failure_info += f"Error Type: {node.exc_type if hasattr(node, 'exc_type') else 'Unknown'}\n"
+            failure_info += f"Debug Depth: {node.debug_depth}\n"
+            if include_code:
+                failure_info += f"Code: {node.code}\n"
+            prompt["Failed Experiments"] += failure_info
+
+        summary = query(
+            system_message=prompt,
+            user_message=(
+                "Please provide a comprehensive summary of the experimental progress that includes:\n"
+                "1. Key patterns of success across working experiments\n"
+                "2. Common failure patterns and pitfalls to avoid\n"
+                "3. Specific recommendations for future experiments based on both successes and failures"
+            ),
+            model=model_kwargs.get("model", "gpt-4o"),
+            temperature=model_kwargs.get("temp", 0.3)
+        )
+
+        return summary
+
+    def generate_summary_old(self, include_code: bool = False) -> str:
+        summary = []
+        for n in self.good_nodes:
+            summary_part = f"Design: {n.plan}\n"
+            if include_code:
+                summary_part += f"Code: {n.code}\n"
+            summary_part += f"Results: {n.analysis}\n"
+            summary_part += f"Validation Metric: {n.metric.value}\n"
+            summary.append(summary_part)
+        return "\n-------------------------------\n".join(summary)
+
+    def to_dict(self):
+        """Convert journal to a JSON-serializable dictionary"""
+        return {"nodes": [node.to_dict() for node in self.nodes]}
+
+    def save_experiment_notes(self, workspace_dir: str, stage_name: str, cfg: Any) -> None:
+        """Save experimental notes and summaries to files"""
+        notes_dir = os.path.join(workspace_dir, "experiment_notes")
+        os.makedirs(notes_dir, exist_ok=True)
+
+        # Get all node summaries once
+        node_summaries = []
+        for node in self.nodes:
+            if hasattr(node, "_agent"):
+                summary = node._agent._generate_node_summary(node)
+                node_summaries.append(
+                    {
+                        "node_id": node.id,
+                        "metric": str(node.metric) if node.metric else "Failed",
+                        "summary": summary,
+                    }
+                )
+                # Save individual node summary
+                with open(
+                    os.path.join(
+                        notes_dir, f"{stage_name}_node_{node.id}_summary.json"
+                    ),
+                    "w",
+                ) as f:
+                    json.dump(summary, f, indent=2)
+
+        summary_prompt = {
+            "Introduction": "Synthesize the experimental findings from this stage",
+            "Node Summaries": node_summaries,
+            "Best Node": (
+                {
+                    "id": self.get_best_node().id,
+                    "metric": str(self.get_best_node(cfg=cfg).metric),
+                }
+                if self.get_best_node(cfg=cfg)
+                else None
+            ),
+        }
+
+        stage_summary = query(
+            system_message=summary_prompt,
+            user_message="Generate a comprehensive summary of the experimental findings in this stage",
+            model=cfg.agent.summary.model if cfg.agent.get("summary", None) else "gpt-4o",
+            temperature=cfg.agent.summary.temp if cfg.agent.get("summary", None) else 0.3
+        )
+
+        with open(os.path.join(notes_dir, f"{stage_name}_summary.txt"), "w") as f:
+            f.write(stage_summary)

@@ -378,7 +378,7 @@ def test_parallel_agent_run():
             assert len(journal) >= 2, f"Expected at least 2 nodes, got {len(journal)}"
 
             if journal.good_nodes:
-                best_node = journal.get_best_node(only_good=True)
+                best_node = journal.get_best_node(only_good=True, use_val_metric_only=True)
                 print(f"\n[TEST] Best node: {best_node.id}")
                 print(f"  - Metric: {best_node.metric}")
 
@@ -446,7 +446,7 @@ def test_parallel_agent_full_4workers():
             assert len(journal) >= 4, f"Expected at least 4 nodes, got {len(journal)}"
 
             if journal.good_nodes:
-                best_node = journal.get_best_node(only_good=True)
+                best_node = journal.get_best_node(only_good=True, use_val_metric_only=True)
                 print(f"\n[TEST] Best node: {best_node.id}")
                 print(f"  - Metric: {best_node.metric}")
 
@@ -725,16 +725,17 @@ def test_full_stage1_with_multi_seed():
                 return True
 
             # Get best node
-            best_node = journal.get_best_node(only_good=True)
+            best_node = journal.get_best_node(only_good=True, use_val_metric_only=True)
             print(f"\n[TEST] Best node from Stage 1: {best_node.id[:8]}")
             print(f"  - Metric: {best_node.metric}")
 
-            # ========== Multi-Seed Evaluation ==========
-            print(f"\n[TEST] Running multi-seed evaluation (num_seeds={config.agent.multi_seed_eval.num_seeds})...")
+            # ========== Check Multi-Seed Evaluation Results ==========
+            # Note: multi-seed evaluation is already run inside agent.run() when enabled
+            # Here we just verify the results
+            seed_nodes = [n for n in journal.nodes if n.is_seed_node]
+            agg_nodes = [n for n in journal.nodes if getattr(n, 'is_seed_agg_node', False)]
 
-            seed_nodes = agent._run_multi_seed_evaluation(best_node)
-
-            print(f"\n[TEST] Multi-seed evaluation completed.")
+            print(f"\n[TEST] Multi-seed evaluation results (already run in agent.run()):")
             print(f"  - Seed nodes created: {len(seed_nodes)}")
 
             successful_seeds = [sn for sn in seed_nodes if not sn.is_buggy]
@@ -744,18 +745,11 @@ def test_full_stage1_with_multi_seed():
                 status = "good" if not sn.is_buggy else "buggy"
                 print(f"    Seed {i}: {sn.id[:8]} ({status})")
 
-            if len(successful_seeds) < 2:
-                print("\n⚠ Not enough successful seed nodes for aggregation.")
-                print("✅ Test 8 PASSED (Stage 1 + Multi-seed, no aggregation)")
-                return True
-
-            # ========== Plot Aggregation ==========
-            print(f"\n[TEST] Running plot aggregation...")
-
-            agg_node = agent._run_plot_aggregation(best_node, successful_seeds)
+            # ========== Check Plot Aggregation Results ==========
+            agg_node = agg_nodes[0] if agg_nodes else None
 
             if agg_node:
-                print(f"\n[TEST] Aggregation completed.")
+                print(f"\n[TEST] Aggregation results:")
                 print(f"  - Aggregation node: {agg_node.id[:8]}")
                 print(f"  - is_seed_agg_node: {agg_node.is_seed_agg_node}")
                 print(f"  - plots generated: {len(agg_node.plots) if agg_node.plots else 0}")
@@ -763,7 +757,7 @@ def test_full_stage1_with_multi_seed():
                     for plot in agg_node.plots[:5]:  # Show first 5
                         print(f"    - {plot}")
             else:
-                print("\n⚠ Aggregation node not created.")
+                print("\n⚠ No aggregation node found.")
 
             # ========== Summary ==========
             print("\n" + "-" * 40)

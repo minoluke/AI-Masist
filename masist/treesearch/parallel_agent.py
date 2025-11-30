@@ -4,12 +4,14 @@ AI-Scientist-v2/ai_scientist/treesearch/parallel_agent.py から移植
 Stage 1 (Initial Implementation) 専用版
 """
 from concurrent.futures import ProcessPoolExecutor, TimeoutError
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Tuple
 import random
 import logging
 
 from .journal import Node, Journal
 from .node_processor import process_node_wrapper
+from .backend import query
+from .utils.response import extract_code, extract_text_up_to_code
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +133,9 @@ class ParallelAgent:
                 continue
 
             # Get best node from unprocessed tree if possible
-            best_node = self.journal.get_best_node(only_good=True)
+            best_node = self.journal.get_best_node(
+                only_good=True, cfg=self.cfg, task_desc=self.task_desc
+            )
             if best_node is None:
                 nodes_to_process.append(None)
                 continue
@@ -254,7 +258,9 @@ class ParallelAgent:
             # Check success condition
             if len(self.journal.good_nodes) > 0:
                 logger.info(f"SUCCESS! Found {len(self.journal.good_nodes)} good node(s)")
-                best_node = self.journal.get_best_node(only_good=True)
+                best_node = self.journal.get_best_node(
+                    only_good=True, cfg=self.cfg, task_desc=self.task_desc
+                )
                 if best_node:
                     logger.info(f"Best node: {best_node.id}")
                     logger.info(f"  Metric: {best_node.metric}")
@@ -405,161 +411,152 @@ class ParallelAgent:
             logger.error(f"Error in plot aggregation: {str(e)}")
             return None
 
+    @property
+    def _prompt_resp_fmt(self):
+        """Response format for aggregation code generation"""
+        return {
+            "Response format": (
+                "Your response should be a brief outline/sketch of your proposed solution in natural language (7-10 sentences), "
+                "followed by a single markdown code block (wrapped in ```) which implements this solution. "
+                "There should be no additional headings or text in your response. Just natural language text followed by a newline and then the markdown code block. "
+            )
+        }
+
+    def plan_and_code_query(self, prompt, retries=3) -> Tuple[str, str]:
+        """Generate a natural language plan + code in the same LLM call and split them apart."""
+        completion_text = None
+        for _ in range(retries):
+            completion_text = query(
+                system_message=prompt,
+                user_message=None,
+                model=self.cfg.agent.code.model,
+                temperature=self.cfg.agent.code.temp,
+            )
+
+            code = extract_code(completion_text)
+            nl_text = extract_text_up_to_code(completion_text)
+
+            if code and nl_text:
+                return nl_text, code
+
+            logger.warning("Plan + code extraction failed, retrying...")
+            prompt["Parsing Feedback"] = (
+                "The code extraction failed. Make sure to use the format ```python ... ``` for the code blocks."
+            )
+
+        logger.error("Final plan + code extraction attempt failed")
+        return "", completion_text  # type: ignore
+
     def _generate_aggregation_code(self, parent_node: Node, seed_nodes: List[Node]) -> str:
-        """Generate code to aggregate metrics from seed evaluations."""
-        # Collect experiment data paths from seed nodes (relative paths)
-        data_paths = []
-        for sn in seed_nodes:
+        """
+        Generate aggregated plots from multi-seed evaluation results using LLM.
+        The LLM references each seed's plot_code and generates new code that
+        aggregates the results with mean values and standard error bars.
+
+        Args:
+            parent_node: The original node that was evaluated
+            seed_nodes: List of nodes from seed evaluation
+
+        Returns:
+            str: The plotting code for aggregated results
+        """
+        # Build prompt guideline
+        prompt_guideline = [
+            "REQUIREMENTS: ",
+            "The code should start with:",
+            "  import matplotlib.pyplot as plt",
+            "  import numpy as np",
+            "  import os",
+            "  working_dir = os.path.join(os.getcwd(), 'working')",
+            "Create standard visualizations of experiment results",
+            "Save all plots to working_dir",
+            "ONLY plot data that exists in experiment_data.npz - DO NOT make up or simulate any values",
+            "Use basic matplotlib without custom styles",
+            "Each plot should be in a separate try-except block",
+            "Always close figures after saving",
+            "Always include a title for each plot, and be sure to use clear subtitles while also specifying the scenario being visualized.",
+            "Make sure to use descriptive names for figures when saving e.g. always include the scenario name and the type of plot in the name",
+            "When there are many similar figures to plot (e.g. generated samples at each epoch), make sure to plot only at a suitable interval of epochs so that you only plot at most 5 figures.",
+            "Make sure to add legend for standard error bars and means if applicable",
+        ]
+
+        prompt_guideline += [
+            "Example data loading and plot saving code: ",
+            """
+                try:
+                    experiment_data_path_list = # Make sure to use the correct experiment data path that's provided in the Experiment Data Path section
+                    all_experiment_data = []
+                    for experiment_data_path in experiment_data_path_list:
+                        npz_path = os.path.join(os.getenv("MASIST_ROOT", os.getcwd()), experiment_data_path, 'experiment_data.npz')
+                        if os.path.exists(npz_path):
+                            data = np.load(npz_path, allow_pickle=True)
+                            experiment_data = data['experiment_data'].item()
+                            all_experiment_data.append(experiment_data)
+                except Exception as e:
+                    print(f'Error loading experiment data: {e}')
+
+                try:
+                    # First plot with error bars
+                    plt.figure()
+                    # ... aggregate data across seeds and plot with mean ± std ...
+                    plt.savefig(os.path.join(working_dir, '[plot_name_1].png'))
+                    plt.close()
+                except Exception as e:
+                    print(f"Error creating plot1: {e}")
+                    plt.close()
+
+                try:
+                    # Second plot
+                    plt.figure()
+                    # ... plotting code ...
+                    plt.savefig(os.path.join(working_dir, '[plot_name_2].png'))
+                    plt.close()
+                except Exception as e:
+                    print(f"Error creating plot2: {e}")
+                    plt.close()
+            """,
+        ]
+
+        # Build plotting prompt
+        plotting_prompt = {
+            "Introduction": (
+                "You are an expert in data visualization and plotting. "
+                "You are given a set of evaluation results and the code that was used to plot them. "
+                "Your task is to write a new plotting code that aggregate the results "
+                "e.g. for example, by adding mean values and standard error bars to the plots."
+            ),
+            "Instructions": {},
+        }
+
+        plotting_prompt["Instructions"] |= self._prompt_resp_fmt
+        plotting_prompt["Instructions"] |= {
+            "Plotting code guideline": prompt_guideline,
+        }
+
+        # Add reference plotting codes from seed nodes
+        plot_code_refs = []
+        exp_data_paths = []
+        for i, sn in enumerate(seed_nodes):
+            if sn.plot_code:
+                plot_code_refs.append(f"plotting code {i+1}:\n{sn.plot_code}\n")
             if sn.exp_results_dir:
-                data_paths.append(sn.exp_results_dir)
+                exp_data_paths.append(sn.exp_results_dir)
 
-        code = f'''
-import os
-import numpy as np
-import matplotlib.pyplot as plt
+        plotting_prompt["Instructions"] |= {
+            "Plotting code reference": "\n".join(plot_code_refs) if plot_code_refs else "No reference code available",
+            "Experiment Data Path": "\n".join(exp_data_paths) if exp_data_paths else "No data paths available",
+        }
 
-working_dir = os.path.join(os.getcwd(), 'working')
-os.makedirs(working_dir, exist_ok=True)
+        # Query LLM for aggregation code
+        plan, code = self.plan_and_code_query(plotting_prompt)
 
-# Seed evaluation data paths (relative to MASIST_ROOT)
-data_paths = {data_paths}
+        logger.info(f"Generated aggregation plan:\n{plan}")
+        logger.debug(f"Generated aggregation code:\n{code}")
 
-# Resolve paths using MASIST_ROOT environment variable
-masist_root = os.getenv("MASIST_ROOT", os.getcwd())
+        # Ensure the code starts with imports
+        if code and not code.strip().startswith("import"):
+            code = "import matplotlib.pyplot as plt\nimport numpy as np\nimport os\n\n" + code
 
-def extract_metrics(exp_data):
-    """Extract metrics from experiment_data (supports both old and new format)."""
-    # New format: scenarios dict with per-scenario metrics
-    if 'scenarios' in exp_data and isinstance(exp_data['scenarios'], dict):
-        scenario_metrics = {{}}
-        for scenario_name, scenario_data in exp_data['scenarios'].items():
-            if isinstance(scenario_data, dict) and 'metrics' in scenario_data:
-                scenario_metrics[scenario_name] = scenario_data['metrics']
-        # Also check for top-level aggregated metrics
-        if 'metrics' in exp_data:
-            scenario_metrics['_aggregated'] = exp_data['metrics']
-        return scenario_metrics
-    # Old format: direct metrics dict
-    elif 'metrics' in exp_data:
-        return {{'_default': exp_data['metrics']}}
-    return {{}}
-
-# Collect metrics from each seed (organized by scenario)
-all_scenario_metrics = {{}}  # scenario_name -> list of metrics dicts
-
-for path in data_paths:
-    # Resolve relative path using MASIST_ROOT
-    full_path = os.path.join(masist_root, path) if not os.path.isabs(path) else path
-    npz_path = os.path.join(full_path, 'experiment_data.npz')
-    if os.path.exists(npz_path):
-        try:
-            data = np.load(npz_path, allow_pickle=True)
-            exp_data = data['experiment_data'].item()
-            scenario_metrics = extract_metrics(exp_data)
-            for scenario_name, metrics in scenario_metrics.items():
-                if scenario_name not in all_scenario_metrics:
-                    all_scenario_metrics[scenario_name] = []
-                all_scenario_metrics[scenario_name].append(metrics)
-        except Exception as e:
-            print(f"Error loading {{npz_path}}: {{e}}")
-
-print(f"Loaded metrics from {{len(data_paths)}} seeds")
-print(f"Scenarios found: {{list(all_scenario_metrics.keys())}}")
-
-# Aggregate metrics per scenario
-aggregated_by_scenario = {{}}
-
-for scenario_name, metrics_list in all_scenario_metrics.items():
-    if not metrics_list:
-        continue
-
-    # Get all metric keys for this scenario
-    all_keys = set()
-    for m in metrics_list:
-        if isinstance(m, dict):
-            all_keys.update(m.keys())
-
-    # Calculate mean and std for each metric
-    aggregated = {{}}
-    for key in all_keys:
-        values = []
-        for m in metrics_list:
-            if isinstance(m, dict) and key in m:
-                val = m[key]
-                if isinstance(val, (int, float)):
-                    values.append(val)
-        if values:
-            aggregated[key] = {{
-                'mean': np.mean(values),
-                'std': np.std(values),
-                'values': values,
-                'n': len(values)
-            }}
-
-    if aggregated:
-        aggregated_by_scenario[scenario_name] = aggregated
-        print(f"\\n[{{scenario_name}}]")
-        for key, stats in aggregated.items():
-            print(f"  {{key}}: mean={{stats['mean']:.4f}}, std={{stats['std']:.4f}} (n={{stats['n']}})")
-
-# Create aggregation plots (one per scenario or combined)
-if aggregated_by_scenario:
-    # Skip internal aggregated metrics for plotting
-    plot_scenarios = {{k: v for k, v in aggregated_by_scenario.items() if not k.startswith('_')}}
-
-    if len(plot_scenarios) == 1:
-        # Single scenario: simple bar plot
-        scenario_name, aggregated = list(plot_scenarios.items())[0]
-        plt.figure(figsize=(10, 6))
-        keys = list(aggregated.keys())
-        means = [aggregated[k]['mean'] for k in keys]
-        stds = [aggregated[k]['std'] for k in keys]
-
-        x = np.arange(len(keys))
-        plt.bar(x, means, yerr=stds, capsize=5, alpha=0.7)
-        plt.xticks(x, keys, rotation=45, ha='right')
-        plt.ylabel('Value')
-        plt.title(f'Aggregated Metrics - {{scenario_name}} (Mean ± Std)')
-        plt.tight_layout()
-        plt.savefig(os.path.join(working_dir, 'aggregated_metrics.png'), dpi=150)
-        plt.close()
-        print("\\nSaved aggregated_metrics.png")
-
-    elif len(plot_scenarios) > 1:
-        # Multiple scenarios: grouped bar plot for comparison
-        all_metric_keys = set()
-        for agg in plot_scenarios.values():
-            all_metric_keys.update(agg.keys())
-        all_metric_keys = sorted(all_metric_keys)
-
-        fig, ax = plt.subplots(figsize=(12, 6))
-        x = np.arange(len(all_metric_keys))
-        width = 0.8 / len(plot_scenarios)
-
-        for i, (scenario_name, aggregated) in enumerate(plot_scenarios.items()):
-            means = [aggregated.get(k, {{}}).get('mean', 0) for k in all_metric_keys]
-            stds = [aggregated.get(k, {{}}).get('std', 0) for k in all_metric_keys]
-            offset = (i - len(plot_scenarios)/2 + 0.5) * width
-            ax.bar(x + offset, means, width, yerr=stds, label=scenario_name, capsize=3, alpha=0.8)
-
-        ax.set_xticks(x)
-        ax.set_xticklabels(all_metric_keys, rotation=45, ha='right')
-        ax.set_ylabel('Value')
-        ax.set_title('Aggregated Metrics by Scenario (Mean ± Std)')
-        ax.legend()
-        plt.tight_layout()
-        plt.savefig(os.path.join(working_dir, 'aggregated_metrics_comparison.png'), dpi=150)
-        plt.close()
-        print("\\nSaved aggregated_metrics_comparison.png")
-
-# Save aggregated data
-np.savez_compressed(
-    os.path.join(working_dir, 'aggregated_data.npz'),
-    aggregated_by_scenario=np.array(aggregated_by_scenario, dtype=object),
-    num_seeds={len(seed_nodes)}
-)
-print("Saved aggregated_data.npz")
-'''
         return code
 
     def cleanup(self):

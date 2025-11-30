@@ -70,6 +70,20 @@ class MultiSeedEvalConfig:
 
 
 @dataclass
+class SelectNodeConfig:
+    """Configuration for node selection LLM"""
+    model: str = "deepseek-chat"
+    temp: float = 0.3
+
+
+@dataclass
+class SummaryConfig:
+    """Configuration for summary generation LLM"""
+    model: str = "deepseek-chat"
+    temp: float = 0.3
+
+
+@dataclass
 class AgentSimulationConfig:
     """Configuration for generated agent simulation code (AG2 agents)"""
     model: str = "deepseek-chat"
@@ -99,6 +113,8 @@ class AgentConfig:
     search: SearchConfig = field(default_factory=SearchConfig)
     multi_seed_eval: MultiSeedEvalConfig = field(default_factory=MultiSeedEvalConfig)
     agent_simulation: AgentSimulationConfig = field(default_factory=AgentSimulationConfig)
+    select_node: SelectNodeConfig = field(default_factory=SelectNodeConfig)
+    summary: SummaryConfig = field(default_factory=SummaryConfig)
 
 
 @dataclass
