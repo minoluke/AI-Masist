@@ -1,294 +1,284 @@
-"""
-Shared configuration classes for unitTest.
-Follows AI-Scientist-v2 configuration patterns.
-"""
+"""configuration and setup utils"""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, cast
-import shutil
+from typing import Hashable, cast, Literal, Optional
 
-try:
-    from omegaconf import OmegaConf, MISSING
-    HAS_OMEGACONF = True
-except ImportError:
-    HAS_OMEGACONF = False
-    OmegaConf = None
-    MISSING = None
+import coolname
+import rich
+from omegaconf import OmegaConf
+from rich.syntax import Syntax
+import shutup
+from rich.logging import RichHandler
+import logging
+
+from . import tree_export
+from . import copytree, preproc_data, serialize
+
+shutup.mute_warnings()
+logging.basicConfig(
+    level="WARNING", format="%(message)s", datefmt="[%X]", handlers=[RichHandler()]
+)
+logger = logging.getLogger("masist")
+logger.setLevel(logging.WARNING)
 
 
+""" these dataclasses are just for type hinting, the actual config is in config.yaml """
+
+
+@dataclass
+class ThinkingConfig:
+    type: str
+    budget_tokens: Optional[int] = None
+
+
+@dataclass
+class StageConfig:
+    model: str
+    temp: float
+    thinking: ThinkingConfig
+    betas: str
+    max_tokens: Optional[int] = None
+
+
+@dataclass
+class SearchConfig:
+    max_debug_depth: int
+    debug_prob: float
+    num_drafts: int
+
+
+@dataclass
+class DebugConfig:
+    stage4: bool
+
+
+@dataclass
+class AgentSimulationConfig:
+    """Configuration for generated agent simulation code (MASist extension)"""
+    model: str = "gpt-4o-mini"
+    temp: float = 0.7
+    api_key_env: str = "OPENAI_API_KEY"
+    base_url: str = "https://api.openai.com/v1"
+    timeout: int = 60
+
+
+@dataclass
+class AgentConfig:
+    steps: int
+    stages: dict[str, int]
+    k_fold_validation: int
+    data_preview: bool
+
+    code: StageConfig
+    feedback: StageConfig
+    vlm_feedback: StageConfig
+
+    search: SearchConfig
+    num_workers: int
+    type: str
+    multi_seed_eval: dict[str, int]
+
+    # MASist extension
+    agent_simulation: Optional[AgentSimulationConfig] = None
+
+    summary: Optional[StageConfig] = None
+    select_node: Optional[StageConfig] = None
+
+
+@dataclass
+class ExecConfig:
+    timeout: int
+    agent_file_name: str
+    format_tb_ipython: bool
+
+
+@dataclass
+class ExperimentConfig:
+    num_syn_datasets: int
+
+
+@dataclass
+class Config(Hashable):
+    data_dir: Path
+    desc_file: Path | None
+
+    goal: str | None
+    eval: str | None
+
+    log_dir: Path
+    workspace_dir: Path
+
+    preprocess_data: bool
+    copy_data: bool
+
+    exp_name: str
+
+    exec: ExecConfig
+    generate_report: bool
+    report: StageConfig
+    agent: AgentConfig
+    experiment: ExperimentConfig
+    debug: DebugConfig
+
+
+def _get_next_logindex(dir: Path) -> int:
+    """Get the next available index for a log directory."""
+    max_index = -1
+    for p in dir.iterdir():
+        try:
+            if (current_index := int(p.name.split("-")[0])) > max_index:
+                max_index = current_index
+        except ValueError:
+            pass
+    print("max_index: ", max_index)
+    return max_index + 1
+
+
+def _load_cfg(
+    path: Path = Path(__file__).parent / "config.yaml", use_cli_args=False
+) -> Config:
+    cfg = OmegaConf.load(path)
+    if use_cli_args:
+        cfg = OmegaConf.merge(cfg, OmegaConf.from_cli())
+    return cfg
+
+
+def load_cfg(path: Path = Path(__file__).parent / "config.yaml") -> Config:
+    """Load config from .yaml file and CLI args, and set up logging directory."""
+    return prep_cfg(_load_cfg(path))
+
+
+def prep_cfg(cfg: Config):
+    if cfg.data_dir is None:
+        raise ValueError("`data_dir` must be provided.")
+
+    if cfg.desc_file is None and cfg.goal is None:
+        raise ValueError(
+            "You must provide either a description of the task goal (`goal=...`) or a path to a plaintext file containing the description (`desc_file=...`)."
+        )
+
+    if cfg.data_dir.startswith("example_tasks/"):
+        cfg.data_dir = Path(__file__).parent.parent / cfg.data_dir
+    cfg.data_dir = Path(cfg.data_dir).resolve()
+
+    if cfg.desc_file is not None:
+        cfg.desc_file = Path(cfg.desc_file).resolve()
+
+    top_log_dir = Path(cfg.log_dir).resolve()
+    top_log_dir.mkdir(parents=True, exist_ok=True)
+
+    top_workspace_dir = Path(cfg.workspace_dir).resolve()
+    top_workspace_dir.mkdir(parents=True, exist_ok=True)
+
+    # generate experiment name and prefix with consecutive index
+    ind = max(_get_next_logindex(top_log_dir), _get_next_logindex(top_workspace_dir))
+    cfg.exp_name = cfg.exp_name or coolname.generate_slug(3)
+    cfg.exp_name = f"{ind}-{cfg.exp_name}"
+
+    cfg.log_dir = (top_log_dir / cfg.exp_name).resolve()
+    cfg.workspace_dir = (top_workspace_dir / cfg.exp_name).resolve()
+
+    # validate the config
+    cfg_schema: Config = OmegaConf.structured(Config)
+    cfg = OmegaConf.merge(cfg_schema, cfg)
+
+    if cfg.agent.type not in ["parallel", "sequential"]:
+        raise ValueError("agent.type must be either 'parallel' or 'sequential'")
+
+    return cast(Config, cfg)
+
+
+def print_cfg(cfg: Config) -> None:
+    rich.print(Syntax(OmegaConf.to_yaml(cfg), "yaml", theme="paraiso-dark"))
+
+
+def load_task_desc(cfg: Config):
+    """Load task description from markdown file or config str."""
+
+    # either load the task description from a file
+    if cfg.desc_file is not None:
+        if not (cfg.goal is None and cfg.eval is None):
+            logger.warning(
+                "Ignoring goal and eval args because task description file is provided."
+            )
+
+        with open(cfg.desc_file) as f:
+            return f.read()
+
+    # or generate it from the goal and eval args
+    if cfg.goal is None:
+        raise ValueError(
+            "`goal` (and optionally `eval`) must be provided if a task description file is not provided."
+        )
+
+    task_desc = {"Task goal": cfg.goal}
+    if cfg.eval is not None:
+        task_desc["Task evaluation"] = cfg.eval
+    print(task_desc)
+    return task_desc
+
+
+def prep_agent_workspace(cfg: Config):
+    """Setup the agent's workspace and preprocess data if necessary."""
+    (cfg.workspace_dir / "input").mkdir(parents=True, exist_ok=True)
+    (cfg.workspace_dir / "working").mkdir(parents=True, exist_ok=True)
+
+    copytree(cfg.data_dir, cfg.workspace_dir / "input", use_symlinks=not cfg.copy_data)
+    if cfg.preprocess_data:
+        preproc_data(cfg.workspace_dir / "input")
+
+
+def save_run(cfg: Config, journal, stage_name: str = None):
+    if stage_name is None:
+        stage_name = "NoStageRun"
+    save_dir = cfg.log_dir / stage_name
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    # save journal
+    try:
+        serialize.dump_json(journal, save_dir / "journal.json")
+    except Exception as e:
+        print(f"Error saving journal: {e}")
+        raise
+    # save config
+    try:
+        OmegaConf.save(config=cfg, f=save_dir / "config.yaml")
+    except Exception as e:
+        print(f"Error saving config: {e}")
+        raise
+    # create the tree + code visualization
+    try:
+        tree_export.generate(cfg, journal, save_dir / "tree_plot.html")
+    except Exception as e:
+        print(f"Error generating tree: {e}")
+        raise
+    # save the best found solution
+    try:
+        best_node = journal.get_best_node(only_good=False, cfg=cfg)
+        if best_node is not None:
+            for existing_file in save_dir.glob("best_solution_*.py"):
+                existing_file.unlink()
+            # Create new best solution file
+            filename = f"best_solution_{best_node.id}.py"
+            with open(save_dir / filename, "w") as f:
+                f.write(best_node.code)
+            # save best_node.id to a text file
+            with open(save_dir / "best_node_id.txt", "w") as f:
+                f.write(str(best_node.id))
+        else:
+            print("No best node found yet")
+    except Exception as e:
+        print(f"Error saving best solution: {e}")
+        raise
+
+
+# Helper functions for getting project paths
 def get_project_root() -> Path:
-    """Get the project root directory (unitTest/)"""
-    # masist/treesearch/utils/config.py -> unitTest/
+    """Get the project root directory"""
     return Path(__file__).parent.parent.parent.parent.resolve()
 
 
 def get_default_workspace_dir(name: str = "default") -> Path:
     """Get default workspace directory under project root"""
     return get_project_root() / "workspaces" / name
-
-
-def get_default_log_dir(name: str = "default") -> Path:
-    """Get default log directory under project root"""
-    return get_project_root() / "logs" / name
-
-
-@dataclass
-class SearchConfig:
-    """Search configuration for tree search"""
-    num_drafts: int = 4
-    debug_prob: float = 0.5
-    max_debug_depth: int = 3
-
-
-@dataclass
-class CodeConfig:
-    """Configuration for code generation LLM"""
-    model: str = "deepseek-chat"
-    temp: float = 1.0
-
-
-@dataclass
-class FeedbackConfig:
-    """Configuration for feedback LLM"""
-    model: str = "deepseek-chat"
-    temp: float = 0.3
-
-
-@dataclass
-class VLMFeedbackConfig:
-    """Configuration for VLM feedback"""
-    model: str = "gpt-4o-mini"
-    temp: float = 0.3
-
-
-@dataclass
-class MultiSeedEvalConfig:
-    """Configuration for multi-seed evaluation"""
-    enabled: bool = False  # Disabled by default
-    num_seeds: int = 3
-
-
-@dataclass
-class SelectNodeConfig:
-    """Configuration for node selection LLM"""
-    model: str = "deepseek-chat"
-    temp: float = 0.3
-
-
-@dataclass
-class SummaryConfig:
-    """Configuration for summary generation LLM"""
-    model: str = "deepseek-chat"
-    temp: float = 0.3
-
-
-@dataclass
-class AgentSimulationConfig:
-    """Configuration for generated agent simulation code (AG2 agents)"""
-    model: str = "deepseek-chat"
-    api_key_env: str = "DEEPSEEK_API_KEY"  # 環境変数名
-    base_url: str = "https://api.deepseek.com"  # OpenAI互換APIのベースURL（空ならデフォルト）
-    timeout: int = 300
-
-
-@dataclass
-class ExecConfig:
-    """Execution configuration"""
-    timeout: int = 600  # seconds (10 minutes)
-    num_gpus: int = 0
-    format_tb_ipython: bool = True
-    agent_file_name: str = "agent.py"
-
-
-@dataclass
-class AgentConfig:
-    """Agent configuration"""
-    num_workers: int = 2
-    k_fold_validation: int = 1
-    data_preview: bool = False
-    code: CodeConfig = field(default_factory=CodeConfig)
-    feedback: FeedbackConfig = field(default_factory=FeedbackConfig)
-    vlm_feedback: VLMFeedbackConfig = field(default_factory=VLMFeedbackConfig)
-    search: SearchConfig = field(default_factory=SearchConfig)
-    multi_seed_eval: MultiSeedEvalConfig = field(default_factory=MultiSeedEvalConfig)
-    agent_simulation: AgentSimulationConfig = field(default_factory=AgentSimulationConfig)
-    select_node: SelectNodeConfig = field(default_factory=SelectNodeConfig)
-    summary: SummaryConfig = field(default_factory=SummaryConfig)
-
-
-@dataclass
-class ExperimentConfig:
-    """Experiment configuration"""
-    num_syn_datasets: int = 2
-
-
-@dataclass
-class Config:
-    """
-    Main configuration class.
-
-    Usage:
-        # Default paths (under unitTest/)
-        config = Config()
-
-        # Custom workspace name
-        config = Config(workspace_name="my_experiment")
-
-        # Fully custom paths
-        config = Config(
-            workspace_dir=Path("/custom/workspace"),
-            log_dir=Path("/custom/logs")
-        )
-    """
-    # Directory paths - can be overridden
-    workspace_dir: Optional[Path] = None
-    log_dir: Optional[Path] = None
-    workspace_name: str = "default"
-
-    # Sub-configurations
-    exec: ExecConfig = field(default_factory=ExecConfig)
-    agent: AgentConfig = field(default_factory=AgentConfig)
-    experiment: ExperimentConfig = field(default_factory=ExperimentConfig)
-
-    def __post_init__(self):
-        """Set default paths if not provided"""
-        if self.workspace_dir is None:
-            self.workspace_dir = get_default_workspace_dir(self.workspace_name)
-        elif isinstance(self.workspace_dir, str):
-            self.workspace_dir = Path(self.workspace_dir)
-
-        if self.log_dir is None:
-            self.log_dir = get_default_log_dir(self.workspace_name)
-        elif isinstance(self.log_dir, str):
-            self.log_dir = Path(self.log_dir)
-
-    def ensure_dirs(self):
-        """Create workspace and log directories if they don't exist"""
-        self.workspace_dir.mkdir(parents=True, exist_ok=True)
-        self.log_dir.mkdir(parents=True, exist_ok=True)
-        return self
-
-
-def prep_workspace(cfg: Config, data_dir: Optional[Path] = None, copy_data: bool = False):
-    """
-    Setup the agent's workspace directory structure.
-    Following AI-Scientist-v2's prep_agent_workspace pattern.
-
-    Args:
-        cfg: Configuration object
-        data_dir: Optional source data directory to copy into workspace/input
-        copy_data: If True, copy data files; if False, create symlinks (default)
-    """
-    # Create workspace subdirectories
-    input_dir = cfg.workspace_dir / "input"
-    working_dir = cfg.workspace_dir / "working"
-
-    input_dir.mkdir(parents=True, exist_ok=True)
-    working_dir.mkdir(parents=True, exist_ok=True)
-
-    # Create log directory
-    cfg.log_dir.mkdir(parents=True, exist_ok=True)
-
-    # Copy or symlink data if provided
-    if data_dir is not None and data_dir.exists():
-        if copy_data:
-            # Copy entire directory tree
-            if input_dir.exists():
-                shutil.rmtree(input_dir)
-            shutil.copytree(data_dir, input_dir)
-        else:
-            # Create symlinks for each file/directory
-            for item in data_dir.iterdir():
-                target = input_dir / item.name
-                if not target.exists():
-                    target.symlink_to(item.resolve())
-
-    return cfg
-
-
-# ============================================================================
-# OmegaConf + YAML Configuration Support
-# ============================================================================
-
-def load_config(path: Optional[Path] = None, cli_overrides: bool = True) -> Config:
-    """
-    Load configuration from YAML file with optional CLI overrides.
-
-    Args:
-        path: Path to config.yaml file. If None, uses default config.
-        cli_overrides: If True, merge CLI arguments (e.g., `model=gpt-4`)
-
-    Returns:
-        Config object
-
-    Example:
-        # Load from YAML
-        cfg = load_config(Path("config.yaml"))
-
-        # With CLI overrides: python script.py agent.code.model=gpt-4
-        cfg = load_config(Path("config.yaml"), cli_overrides=True)
-    """
-    if not HAS_OMEGACONF:
-        raise ImportError(
-            "omegaconf is required for YAML config loading. "
-            "Install with: pip install omegaconf"
-        )
-
-    if path is None:
-        # Return default config
-        return Config()
-
-    # Load YAML file
-    cfg = OmegaConf.load(path)
-
-    # Merge with CLI arguments if requested
-    if cli_overrides:
-        cfg = OmegaConf.merge(cfg, OmegaConf.from_cli())
-
-    # Create structured config for validation
-    cfg_schema = OmegaConf.structured(Config)
-    cfg = OmegaConf.merge(cfg_schema, cfg)
-
-    return cast(Config, cfg)
-
-
-def save_config(cfg: Config, path: Path):
-    """
-    Save configuration to YAML file.
-
-    Args:
-        cfg: Configuration object
-        path: Output path for YAML file
-    """
-    if not HAS_OMEGACONF:
-        raise ImportError(
-            "omegaconf is required for YAML config saving. "
-            "Install with: pip install omegaconf"
-        )
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    OmegaConf.save(config=cfg, f=path)
-
-
-def print_config(cfg: Config):
-    """Pretty print configuration as YAML"""
-    if not HAS_OMEGACONF:
-        # Fallback: simple dict print
-        import pprint
-        pprint.pprint(cfg.__dict__)
-        return
-
-    try:
-        from rich import print as rprint
-        from rich.syntax import Syntax
-        yaml_str = OmegaConf.to_yaml(cfg)
-        rprint(Syntax(yaml_str, "yaml", theme="monokai"))
-    except ImportError:
-        # Fallback without rich
-        print(OmegaConf.to_yaml(cfg))
-
-
-# Backwards compatibility aliases
-SimpleConfig = Config
-TestConfig = Config

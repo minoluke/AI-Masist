@@ -1,10 +1,14 @@
 import json
 import logging
+import os
 import time
 
+from dotenv import load_dotenv
 from .utils import FunctionSpec, OutputType, opt_messages_to_list, backoff_create
 from funcy import notnone, once, select_values
 import openai
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 

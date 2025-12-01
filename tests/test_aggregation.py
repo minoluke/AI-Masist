@@ -10,6 +10,7 @@ Test cases:
 - Test 5: Mock test without LLM (structure validation)
 """
 import sys
+import json
 import logging
 import os
 import tempfile
@@ -38,23 +39,42 @@ if env_path.exists():
 
 from masist.treesearch import ParallelAgent, Journal, Node
 from masist.treesearch.utils.metric import MetricValue
-from masist.treesearch.utils.config import Config
+from masist.treesearch.utils.config import _load_cfg, prep_cfg, Config
+import shutil
 
 # 実験設定
 from fixtures.experiments import get_experiment
 
 EXPERIMENT = get_experiment("tpgg")
-TASK_DESC = EXPERIMENT["task_desc"]
+# task_desc は dict なので JSON 文字列に変換
+TASK_DESC = json.dumps(EXPERIMENT["task_desc"], ensure_ascii=False, indent=2)
 METRICS = EXPERIMENT["metrics"]
+
+# テスト用設定ファイルパス
+TEST_CONFIG_PATH = Path(__file__).parent / "fixtures" / "test_config.yaml"
 
 
 def create_test_config(workspace_name: str = "test_aggregation") -> Config:
-    """Create a test configuration"""
-    config = Config(workspace_name=workspace_name)
-    config.agent.num_workers = 2
-    config.agent.multi_seed_eval.enabled = True
-    config.agent.multi_seed_eval.num_seeds = 3
-    return config
+    """Create a test configuration from YAML file (AI-Scientist-v2準拠)"""
+    cfg = _load_cfg(TEST_CONFIG_PATH)
+    cfg.exp_name = workspace_name
+    cfg.data_dir = str(Path(__file__).parent / "fixtures" / "test_data")
+    test_data_dir = Path(__file__).parent / "fixtures" / "test_data"
+    test_data_dir.mkdir(parents=True, exist_ok=True)
+    cfg.goal = "Test goal for aggregation"
+    cfg = prep_cfg(cfg)
+    return cfg
+
+
+def cleanup_test_dirs(cfg: Config):
+    """Clean up test directories after tests"""
+    try:
+        if hasattr(cfg, 'log_dir') and Path(cfg.log_dir).exists():
+            shutil.rmtree(cfg.log_dir)
+        if hasattr(cfg, 'workspace_dir') and Path(cfg.workspace_dir).exists():
+            shutil.rmtree(cfg.workspace_dir)
+    except Exception as e:
+        logger.warning(f"Failed to clean up test directories: {e}")
 
 
 def create_mock_seed_nodes(config: Config, num_seeds: int = 3) -> tuple:
@@ -162,7 +182,7 @@ def test_aggregation_code_structure():
     print("=" * 80)
 
     config = create_test_config()
-    config.ensure_dirs()
+    # prep_cfg already creates workspace dirs
     journal = Journal()
 
     try:
@@ -208,7 +228,7 @@ def test_aggregation_code_generation_mock():
     print("=" * 80)
 
     config = create_test_config()
-    config.ensure_dirs()
+    # prep_cfg already creates workspace dirs
     journal = Journal()
 
     try:
@@ -329,7 +349,7 @@ def test_aggregation_prompt_content():
     print("=" * 80)
 
     config = create_test_config()
-    config.ensure_dirs()
+    # prep_cfg already creates workspace dirs
     journal = Journal()
 
     try:
@@ -423,7 +443,7 @@ def test_aggregation_code_generation_real():
         return True
 
     config = create_test_config(workspace_name="test_agg_real")
-    config.ensure_dirs()
+    # prep_cfg already creates workspace dirs
     journal = Journal()
 
     try:
@@ -485,7 +505,7 @@ def test_aggregation_code_executable():
     print("=" * 80)
 
     config = create_test_config()
-    config.ensure_dirs()
+    # prep_cfg already creates workspace dirs
     journal = Journal()
 
     try:
@@ -582,7 +602,7 @@ def test_empty_seed_nodes():
     print("=" * 80)
 
     config = create_test_config()
-    config.ensure_dirs()
+    # prep_cfg already creates workspace dirs
     journal = Journal()
 
     try:

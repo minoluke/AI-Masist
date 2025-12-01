@@ -13,6 +13,7 @@ Tests parallel node processing with multiple workers
 - Test 8: Stage 1 フルフロー + マルチシード評価・集約（統合テスト）
 """
 import sys
+import json
 import logging
 import random
 from pathlib import Path
@@ -41,7 +42,8 @@ else:
 
 from masist.treesearch import ParallelAgent, Journal, Node
 from masist.treesearch.utils.metric import MetricValue
-from masist.treesearch.utils.config import Config
+from masist.treesearch.utils.config import _load_cfg, prep_cfg, Config
+import shutil
 
 # 実験設定を fixtures からインポート
 from fixtures.experiments import get_experiment, list_experiments
@@ -51,23 +53,44 @@ CURRENT_EXPERIMENT = "tpgg"
 SIMPLE_TASK_DESC = None
 SAMPLE_METRICS = None
 
+# テスト用設定ファイルパス
+TEST_CONFIG_PATH = Path(__file__).parent / "fixtures" / "test_config.yaml"
+
 
 def set_experiment(name: str):
     """実験を設定する"""
     global CURRENT_EXPERIMENT, SIMPLE_TASK_DESC, SAMPLE_METRICS
     exp = get_experiment(name)
     CURRENT_EXPERIMENT = name
-    SIMPLE_TASK_DESC = exp["task_desc"]
+    # task_desc は dict なので JSON 文字列に変換
+    SIMPLE_TASK_DESC = json.dumps(exp["task_desc"], ensure_ascii=False, indent=2)
     SAMPLE_METRICS = exp["metrics"]
     print(f"[Experiment] Using: {exp['name']} ({name})")
     print(f"[Experiment] Metrics: {SAMPLE_METRICS}")
 
 
 def create_test_config(workspace_name: str = "test_parallel", num_workers: int = 2) -> Config:
-    """Create a test configuration with workspace under project root"""
-    config = Config(workspace_name=workspace_name)
-    config.agent.num_workers = num_workers
-    return config
+    """Create a test configuration from YAML file (AI-Scientist-v2準拠)"""
+    cfg = _load_cfg(TEST_CONFIG_PATH)
+    cfg.exp_name = workspace_name
+    cfg.data_dir = str(Path(__file__).parent / "fixtures" / "test_data")
+    test_data_dir = Path(__file__).parent / "fixtures" / "test_data"
+    test_data_dir.mkdir(parents=True, exist_ok=True)
+    cfg.goal = "Test goal for parallel"
+    cfg.agent.num_workers = num_workers
+    cfg = prep_cfg(cfg)
+    return cfg
+
+
+def cleanup_test_dirs(cfg: Config):
+    """Clean up test directories after tests"""
+    try:
+        if hasattr(cfg, 'log_dir') and Path(cfg.log_dir).exists():
+            shutil.rmtree(cfg.log_dir)
+        if hasattr(cfg, 'workspace_dir') and Path(cfg.workspace_dir).exists():
+            shutil.rmtree(cfg.workspace_dir)
+    except Exception as e:
+        logging.warning(f"Failed to clean up test directories: {e}")
 
 
 def test_parallel_agent_init():
@@ -114,7 +137,7 @@ def test_parallel_agent_single_step():
     config.agent.num_workers = 2
 
     journal = Journal()
-    config.ensure_dirs()
+    # prep_cfg already creates workspace dirs
 
     try:
         with ParallelAgent(
@@ -192,7 +215,7 @@ def test_parallel_agent_4_workers():
     config.agent.num_workers = 4  # 4ワーカー並列
 
     journal = Journal()
-    config.ensure_dirs()
+    # prep_cfg already creates workspace dirs
 
     try:
         with ParallelAgent(
@@ -353,7 +376,7 @@ def test_parallel_agent_run():
     config.agent.search.num_drafts = 2  # Stop drafting after 2
 
     journal = Journal()
-    config.ensure_dirs()
+    # prep_cfg already creates workspace dirs
 
     try:
         with ParallelAgent(
@@ -403,7 +426,7 @@ def test_parallel_agent_full_4workers():
     config.agent.search.num_drafts = 4
 
     journal = Journal()
-    config.ensure_dirs()
+    # prep_cfg already creates workspace dirs
 
     try:
         with ParallelAgent(
@@ -472,17 +495,15 @@ def test_multi_seed_evaluation():
     config = create_test_config(workspace_name="test_multi_seed")
     config.agent.num_workers = 2
     config.agent.search.num_drafts = 2
-    # Enable multi-seed evaluation
-    config.agent.multi_seed_eval.enabled = True
-    config.agent.multi_seed_eval.num_seeds = 3
+    # Set multi-seed evaluation (AI-Scientist-v2 style: dict[str, int])
+    config.agent.multi_seed_eval["num_seeds"] = 3
 
     journal = Journal()
-    config.ensure_dirs()
+    # prep_cfg already creates workspace dirs
 
     try:
         print(f"\n[TEST] Multi-seed config:")
-        print(f"  - enabled: {config.agent.multi_seed_eval.enabled}")
-        print(f"  - num_seeds: {config.agent.multi_seed_eval.num_seeds}")
+        print(f"  - num_seeds: {config.agent.multi_seed_eval['num_seeds']}")
 
         # === Test 7a: Create a mock good node with experiment_data ===
         print("\n[TEST 7a] Creating mock good node with experiment_data...")
@@ -580,8 +601,8 @@ print(f'Simulation completed: metrics = {experiment_data["metrics"]}')
                 print(f"    Seed {i}: node_id={sn.id}, is_seed_node={sn.is_seed_node}")
 
             # Verify seed nodes
-            assert len(seed_nodes) == config.agent.multi_seed_eval.num_seeds, \
-                f"Expected {config.agent.multi_seed_eval.num_seeds} seed nodes, got {len(seed_nodes)}"
+            assert len(seed_nodes) == config.agent.multi_seed_eval["num_seeds"], \
+                f"Expected {config.agent.multi_seed_eval['num_seeds']} seed nodes, got {len(seed_nodes)}"
 
             for sn in seed_nodes:
                 assert sn.is_seed_node, "Seed node should have is_seed_node=True"
@@ -689,18 +710,16 @@ def test_full_stage1_with_multi_seed():
     config.agent.num_workers = 4
     config.agent.search.num_drafts = 4
     # Enable multi-seed evaluation
-    config.agent.multi_seed_eval.enabled = True
-    config.agent.multi_seed_eval.num_seeds = 3
+    config.agent.multi_seed_eval["num_seeds"] = 3
 
     journal = Journal()
-    config.ensure_dirs()
+    # prep_cfg already creates workspace dirs
 
     try:
         print(f"\n[TEST] Configuration:")
         print(f"  - num_workers: {config.agent.num_workers}")
         print(f"  - num_drafts: {config.agent.search.num_drafts}")
-        print(f"  - multi_seed_eval.enabled: {config.agent.multi_seed_eval.enabled}")
-        print(f"  - multi_seed_eval.num_seeds: {config.agent.multi_seed_eval.num_seeds}")
+        print(f"  - multi_seed_eval.num_seeds: {config.agent.multi_seed_eval['num_seeds']}")
 
         with ParallelAgent(
             task_desc=SIMPLE_TASK_DESC,

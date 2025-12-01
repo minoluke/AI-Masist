@@ -28,6 +28,10 @@ class ParallelAgent:
         cfg: Any,
         journal: Journal,
         evaluation_metrics: list = None,
+        stage_name: str = None,
+        best_stage1_node: Node = None,
+        best_stage2_node: Node = None,
+        best_stage3_node: Node = None,
     ):
         """
         Initialize ParallelAgent.
@@ -37,11 +41,20 @@ class ParallelAgent:
             cfg: Configuration object
             journal: Journal instance for storing nodes
             evaluation_metrics: List of evaluation metrics
+            stage_name: Name of the current stage
+            best_stage1_node: Best node from stage 1 (for stage 2 initialization)
+            best_stage2_node: Best node from stage 2 (for stage 3 initialization)
+            best_stage3_node: Best node from stage 3 (for stage 4 initialization)
         """
         self.task_desc = task_desc
         self.cfg = cfg
         self.journal = journal
         self.evaluation_metrics = evaluation_metrics or []
+        self.stage_name = stage_name
+        self.best_stage1_node = best_stage1_node
+        self.best_stage2_node = best_stage2_node
+        self.best_stage3_node = best_stage3_node
+        self.data_preview = None
 
         # Worker configuration
         self.num_workers = cfg.agent.num_workers
@@ -265,8 +278,8 @@ class ParallelAgent:
                     logger.info(f"Best node: {best_node.id}")
                     logger.info(f"  Metric: {best_node.metric}")
 
-                    # Run multi-seed evaluation if enabled
-                    if hasattr(self.cfg.agent, 'multi_seed_eval') and self.cfg.agent.multi_seed_eval.enabled:
+                    # Run multi-seed evaluation if enabled (num_seeds > 0)
+                    if hasattr(self.cfg.agent, 'multi_seed_eval') and self.cfg.agent.multi_seed_eval.get("num_seeds", 0) > 0:
                         logger.info("Running multi-seed evaluation...")
                         seed_nodes = self._run_multi_seed_evaluation(best_node)
                         if seed_nodes:
@@ -288,7 +301,7 @@ class ParallelAgent:
         """
         from .node_processor import process_node_wrapper
 
-        num_seeds = self.cfg.agent.multi_seed_eval.num_seeds
+        num_seeds = self.cfg.agent.multi_seed_eval.get("num_seeds", 3)
 
         logger.info(f"Starting multi-seed evaluation with {num_seeds} runs...")
 
