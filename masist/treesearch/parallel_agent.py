@@ -177,10 +177,13 @@ class ParallelAgent:
 
         return nodes_to_process
 
-    def step(self):
+    def step(self, exec_callback):
         """
         Execute one iteration of parallel node processing.
         Selects nodes, processes them in parallel, and adds results to journal.
+
+        Args:
+            exec_callback: Callback for code execution (AI-Scientist-v2 compatible signature)
         """
         logger.debug("=" * 60)
         logger.debug("ParallelAgent.step() - Selecting nodes to process")
@@ -249,12 +252,13 @@ class ParallelAgent:
         logger.debug(f"  Good nodes: {len(self.journal.good_nodes)}")
         logger.debug(f"  Buggy nodes: {len(self.journal.buggy_nodes)}")
 
-    def run(self, max_steps: int = 20) -> bool:
+    def run(self, max_steps: int = 20, exec_callback=None) -> bool:
         """
         Run Stage 1 until success or max_steps reached.
 
         Args:
             max_steps: Maximum number of iterations
+            exec_callback: Callback for code execution (AI-Scientist-v2 compatible)
 
         Returns:
             True if at least one good node was found, False otherwise
@@ -266,7 +270,7 @@ class ParallelAgent:
         for step_num in range(max_steps):
             logger.info(f"Step {step_num + 1}/{max_steps}")
 
-            self.step()
+            self.step(exec_callback)
 
             # Check success condition
             if len(self.journal.good_nodes) > 0:
@@ -391,10 +395,8 @@ class ParallelAgent:
                 # Collect generated plots
                 plots_dir = Path(working_dir)
                 if plots_dir.exists():
-                    base_dir = Path(self.cfg.workspace_dir).parent
-                    run_name = Path(self.cfg.workspace_dir).name
                     exp_results_dir = (
-                        base_dir / "logs" / run_name / "experiment_results"
+                        Path(self.cfg.log_dir) / "experiment_results"
                         / f"seed_aggregation_{agg_node.id}"
                     )
                     exp_results_dir.mkdir(parents=True, exist_ok=True)

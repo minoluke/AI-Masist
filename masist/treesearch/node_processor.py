@@ -208,12 +208,8 @@ def process_node_wrapper(
 
             try:
                 # Create experiment results directory
-                base_dir = Path(cfg.workspace_dir).parent
-                run_name = Path(cfg.workspace_dir).name
                 exp_results_dir = (
-                    base_dir
-                    / "logs"
-                    / run_name
+                    Path(cfg.log_dir)
                     / "experiment_results"
                     / f"experiment_{child_node.id}_proc_{os.getpid()}"
                 )

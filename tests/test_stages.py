@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from masist.treesearch.parallel_agent import ParallelAgent
 from masist.treesearch.agent_manager import AgentManager, Stage
 from masist.treesearch.journal import Journal, Node
-from masist.treesearch.utils.config import _load_cfg, prep_cfg
+from masist.treesearch.utils.config import _load_cfg, prep_cfg, prep_agent_workspace
 from masist.treesearch.interpreter import Interpreter
 
 # Test configuration path
@@ -61,7 +61,14 @@ EXPERIMENTS = {
             "SimulationRequirements": {
                 "Agents": ["contributor_agent"],
                 "Scenarios": ["low_threshold", "high_threshold"],
-                "Rounds": 5
+                "Rounds": 5,
+                "Rules": {
+                    "ExperimentConditions": [
+                        "Vary threshold levels (low: 50%, high: 80% of max contribution)",
+                        "Test with different group sizes (3 and 5 agents)",
+                        "Measure coordination success rate across conditions"
+                    ]
+                }
             },
             "Logging": {
                 "Required": ["contributions", "threshold_achieved", "final_payoffs"]
@@ -486,6 +493,9 @@ def test_all_stages_with_agent_manager():
     config.generate_report = False  # Disable report generation for test
 
     try:
+        # Prepare agent workspace (creates directories, copies files)
+        prep_agent_workspace(config)
+
         # Create interpreter for code execution
         interpreter = create_interpreter(config)
 

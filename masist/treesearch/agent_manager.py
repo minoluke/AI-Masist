@@ -233,23 +233,25 @@ Your research idea:\n\n
         task_desc = self._get_task_desc_str()
 
         if stage.name.startswith("3_"):
-            if isinstance(self.task_desc["Experiments"], list):
-                if isinstance(self.task_desc["Experiments"][0], str):
-                    experiment_str = "\n".join(self.task_desc["Experiments"])
-                elif isinstance(self.task_desc["Experiments"][0], dict):
+            experiments = self.task_desc.get("Experiments", [])
+            if isinstance(experiments, list) and len(experiments) > 0:
+                if isinstance(experiments[0], str):
+                    experiment_str = "\n".join(experiments)
+                elif isinstance(experiments[0], dict):
                     experiment_str = "\n".join(
                         [
                             f"{k}: {v}"
-                            for d in self.task_desc["Experiments"]
+                            for d in experiments
                             for k, v in d.items()
                         ]
                     )
-            elif isinstance(self.task_desc["Experiments"], str):
-                experiment_str = self.task_desc["Experiments"]
+                else:
+                    experiment_str = str(experiments)
+            elif isinstance(experiments, str) and experiments:
+                experiment_str = experiments
             else:
-                raise ValueError(
-                    f"Experiments is not a list or string: {self.task_desc['Experiments']}"
-                )
+                # Empty or missing Experiments - use Short Hypothesis as fallback
+                experiment_str = self.task_desc.get("Short Hypothesis", "No specific experiments defined.")
             task_desc += "Experiment Plan: " + experiment_str + "\n"
         elif stage.name.startswith("4_"):
             if isinstance(self.task_desc["Risk Factors and Limitations"], list):
@@ -268,13 +270,7 @@ Your research idea:\n\n
             logger.warning("Cannot save checkpoint: current_stage is None")
             return
         stage_name = "stage_" + self.current_stage.name
-        save_path = (
-            Path(self.workspace_dir).parent
-            / "logs"
-            / Path(self.workspace_dir).name
-            / stage_name
-            / "checkpoint.pkl"
-        )
+        save_path = Path(self.cfg.log_dir) / stage_name / "checkpoint.pkl"
         checkpoint = {
             "journals": self.journals,
             "stage_history": self.stage_history,
@@ -283,6 +279,8 @@ Your research idea:\n\n
             "workspace_dir": self.workspace_dir,
             "current_stage": self.current_stage,
         }
+        # Create directory if it doesn't exist (same pattern as _save_stage_summary)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
         print("Saving checkpoint to ", save_path)
         with open(save_path, "wb") as f:
             pickle.dump(checkpoint, f)
@@ -894,13 +892,9 @@ Your research idea:\n\n
             prompt_parts.append(metrics_summary)
 
             # Save stage transition analysis to notes directory
-            base_dir = Path(self.workspace_dir).parent.parent
-            run_name = Path(self.workspace_dir).name
             stage_number = previous_stages[-1].stage_number
             notes_dir = (
-                base_dir
-                / "logs"
-                / run_name
+                Path(self.cfg.log_dir)
                 / "notes"
                 / f"stage_{stage_number-1}_to_{stage_number}"
             )
@@ -961,12 +955,8 @@ Your research idea:\n\n
         self, current_results: Dict[str, Any], evaluation: Dict[str, Any]
     ):
         """Save comprehensive stage completion summary"""
-        base_dir = Path(self.workspace_dir).parent.parent
-        run_name = Path(self.workspace_dir).name
         notes_dir = (
-            base_dir
-            / "logs"
-            / run_name
+            Path(self.cfg.log_dir)
             / "notes"
             / f"stage_{self.current_stage.stage_number}_complete"
         )

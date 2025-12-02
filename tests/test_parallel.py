@@ -148,8 +148,8 @@ def test_parallel_agent_single_step():
         ) as agent:
             print(f"\n[TEST] Running single step with {agent.num_workers} workers...")
 
-            # Execute one step
-            agent.step()
+            # Execute one step (exec_callback is required but not used internally)
+            agent.step(exec_callback=None)
 
             # Verify results
             print(f"\n[TEST] Verifying results...")
@@ -226,8 +226,8 @@ def test_parallel_agent_4_workers():
         ) as agent:
             print(f"\n[TEST] Running single step with {agent.num_workers} workers...")
 
-            # Execute one step
-            agent.step()
+            # Execute one step (exec_callback is required but not used internally)
+            agent.step(exec_callback=None)
 
             # Verify results
             print(f"\n[TEST] Verifying results...")
