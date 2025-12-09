@@ -123,17 +123,19 @@ class StageTransition:
 class AgentManager:
     def __init__(self, task_desc: str, cfg: Any, workspace_dir: Path):
         self.task_desc = json.loads(task_desc)
-        # MASist専用キーチェック
+        # MASist専用キーチェック（新ネスト構造対応）
         required_keys = [
             "Title",
             "Name",
             "SimulationRequest",
             "SimulationRequirements",
-            "Logging",
         ]
         for k in required_keys:
             if k not in self.task_desc.keys():
                 raise ValueError(f"Key {k} not found in task_desc")
+        # Loggingはネスト構造（SimulationRequirements.Logging）をチェック
+        if "Logging" not in self.task_desc.get("SimulationRequirements", {}):
+            raise ValueError("Key 'Logging' not found in SimulationRequirements")
         # AI-Scientist-v2互換キーを内部生成
         self._generate_compat_keys()
         self.cfg = cfg

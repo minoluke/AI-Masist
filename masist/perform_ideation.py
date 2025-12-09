@@ -27,55 +27,60 @@ tools = [
         "name": "FinalizeIdea",
         "description": """Finalize your idea by providing the idea details.
 
-The IDEA JSON should include the following fields:
+The IDEA JSON should use the following NESTED STRUCTURE:
 
-**Basic Information:**
-- "Name": A short descriptor of the idea. Lowercase, no spaces, underscores allowed.
-- "Title": A catchy and informative title for the multi-agent simulation proposal.
+```json
+{
+  "Name": "short_descriptor",
+  "Title": "Catchy and Informative Title",
 
-**Simulation Request:**
-- "Background": Background context, related social phenomena, theories, or prior research motivating this simulation.
-- "Objective": What this simulation aims to clarify or demonstrate.
-- "Research Question": The specific research question to be answered.
-- "Hypothesis": Main hypothesis. Clarify the need for this specific direction and expected outcomes.
-- "Related Work": Brief discussion of relevant prior work and how this proposal differs.
-- "Abstract": An abstract summarizing the proposal in conference format (approximately 250 words).
+  "SimulationRequest": {
+    "Background": "Background context, related social phenomena, theories, or prior research.",
+    "Purpose": "What this simulation aims to clarify or demonstrate.",
+    "ResearchQuestions": ["Research question 1", "Research question 2"],
+    "Hypotheses": ["Hypothesis 1", "Hypothesis 2"],
+    "RelatedWork": "Brief discussion of relevant prior work.",
+    "Abstract": "Abstract summarizing the proposal (approximately 250 words)."
+  },
 
-**Simulation Specifications:**
-- "Agents": Agent specifications including:
-  - "Count": Number of agents or range.
-  - "Roles": Agent types and role descriptions.
-  - "State Specification": Memory, internal states, behavioral specifications.
-  - "State Update": How agent states are updated.
-  - "Environment Interaction": How agents interact with the environment.
-- "Environment": Environment specifications including:
-  - "Structure": Spatial structure, network topology, etc.
-  - "State Specification": State variables of the environment.
-  - "Update Rules": How the environment state changes.
-- "Protocol": Simulation protocol including:
-  - "Turn Structure": How time progresses (synchronous/asynchronous, rounds, timesteps).
-  - "Termination Condition": When the simulation ends.
-  - "Number of Trials": Number of trials per experimental condition.
-  - "Interaction Flow": Flow of interactions between agents.
-- "Rules": Game/interaction rules including:
-  - "Public Information": Information known to all agents.
-  - "Private Information": Information specific to each agent.
-  - "Decision Rules": (Optional) How agents make decisions.
-  - "Payoff Structure": (Optional) Reward/penalty structure.
+  "SimulationRequirements": {
+    "Agents": {
+      "Count": "Number of agents or range",
+      "RolesAndDescriptions": "Agent types and role descriptions",
+      "StateSpec": "Memory, internal states, behavioral specifications",
+      "StateUpdate": "How agent states are updated",
+      "EnvironmentInteraction": "How agents interact with the environment"
+    },
+    "Environment": {
+      "Structure": "Spatial structure, network topology, etc.",
+      "StateSpec": "State variables of the environment",
+      "UpdateRules": "How the environment state changes"
+    },
+    "Protocol": {
+      "TurnStructure": "How time progresses (synchronous/asynchronous, rounds, timesteps)",
+      "TerminationCondition": "When the simulation ends",
+      "TrialsPerPhase": "Number of trials per experimental condition",
+      "DialogueFlow": "Flow of interactions between agents"
+    },
+    "Rules": {
+      "SharedInformation": "Information known to all agents",
+      "PrivateInformation": "Information specific to each agent",
+      "PayoffStructure": "(Optional) Reward/penalty structure",
+      "ExperimentConditions": ["Condition 1", "Condition 2"]
+    },
+    "Logging": {
+      "ContentToRecord": "What data to record during simulation",
+      "LogFormat": "Structure of logged data",
+      "AnalysisMetrics": "Metrics to evaluate simulation outcomes",
+      "VerificationMethod": "How to verify the hypothesis using the metrics"
+    }
+  },
 
-**Experiment Design:**
-- "Experimental Conditions": Independent variables to manipulate.
-- "Baseline": Baseline condition for comparison.
-- "Parameter Sweep": (Optional) Range of parameters to explore.
+  "RiskFactorsAndLimitations": ["Risk 1", "Risk 2"]
+}
+```
 
-**Logging and Analysis:**
-- "Logging Content": What data to record during simulation.
-- "Log Format": Structure of logged data.
-- "Analysis Metrics": Metrics to evaluate simulation outcomes.
-- "Verification Method": How to verify the hypothesis using the metrics.
-
-**Risks:**
-- "Risk Factors and Limitations": Potential risks, scalability concerns, generalizability issues.""",
+**Important:** Use this exact nested structure with English keys.""",
     },
 ]
 
@@ -102,55 +107,60 @@ tool_names_str = ", ".join(tool_names)
 # FinalizeIdea tool description in Japanese
 finalize_idea_description_ja = """アイデアの詳細を提供してアイデアを確定してください。
 
-IDEA JSONには以下のフィールドを含める必要があります：
+IDEA JSONは以下の**ネスト構造**を使用してください：
 
-**基本情報:**
-- "Name": アイデアの短い識別子。小文字、スペースなし、アンダースコア使用可。
-- "Title": マルチエージェントシミュレーション提案のためのキャッチーで情報量のあるタイトル。
+```json
+{
+  "Name": "short_descriptor",
+  "Title": "キャッチーで情報量のあるタイトル",
 
-**シミュレーション要求:**
-- "Background": 背景・文脈。このシミュレーションの動機となる社会現象、理論、先行研究。
-- "Objective": 目的。このシミュレーションで何を明らかにまたは実証したいか。
-- "Research Question": 研究質問。答えるべき具体的な研究質問。
-- "Hypothesis": 仮説。主要な仮説。この特定の方向性の必要性と期待される結果を明確にする。
-- "Related Work": 関連研究。関連する先行研究の簡潔な議論と、本提案がどのように異なるか。
-- "Abstract": アブストラクト。カンファレンス形式で提案を要約（約250語）。
+  "SimulationRequest": {
+    "Background": "背景・文脈。このシミュレーションの動機となる社会現象、理論、先行研究。",
+    "Purpose": "目的。このシミュレーションで何を明らかにまたは実証したいか。",
+    "ResearchQuestions": ["研究質問1", "研究質問2"],
+    "Hypotheses": ["仮説1", "仮説2"],
+    "RelatedWork": "関連する先行研究の簡潔な議論と、本提案がどのように異なるか。",
+    "Abstract": "カンファレンス形式で提案を要約（約250語）。"
+  },
 
-**シミュレーション要件:**
-- "Agents": エージェント仕様
-  - "Count": 人数または範囲
-  - "Roles": エージェントの種類とロールの説明
-  - "State Specification": 記憶、内部状態、行動の仕様
-  - "State Update": エージェントの状態がどのように更新されるか
-  - "Environment Interaction": エージェントと環境の相互作用方法
-- "Environment": 環境仕様
-  - "Structure": 空間構造、ネットワークトポロジーなど
-  - "State Specification": 環境の状態変数
-  - "Update Rules": 環境の状態がどのように変化するか
-- "Protocol": シミュレーションプロトコル
-  - "Turn Structure": 時間の進み方（同期/非同期、ラウンド、タイムステップ）
-  - "Termination Condition": シミュレーション終了条件
-  - "Number of Trials": 各実験条件での試行回数
-  - "Interaction Flow": エージェント間の相互作用の流れ
-- "Rules": ゲーム/相互作用ルール
-  - "Public Information": 全エージェントが知っている情報
-  - "Private Information": 各エージェント固有の情報
-  - "Decision Rules": (任意) エージェントの意思決定方法
-  - "Payoff Structure": (任意) 報酬/ペナルティ構造
+  "SimulationRequirements": {
+    "Agents": {
+      "Count": "人数または範囲",
+      "RolesAndDescriptions": "エージェントの種類とロールの説明",
+      "StateSpec": "記憶、内部状態、行動の仕様",
+      "StateUpdate": "エージェントの状態がどのように更新されるか",
+      "EnvironmentInteraction": "エージェントと環境の相互作用方法"
+    },
+    "Environment": {
+      "Structure": "空間構造、ネットワークトポロジーなど",
+      "StateSpec": "環境の状態変数",
+      "UpdateRules": "環境の状態がどのように変化するか"
+    },
+    "Protocol": {
+      "TurnStructure": "時間の進み方（同期/非同期、ラウンド、タイムステップ）",
+      "TerminationCondition": "シミュレーション終了条件",
+      "TrialsPerPhase": "各実験条件での試行回数",
+      "DialogueFlow": "エージェント間の相互作用の流れ"
+    },
+    "Rules": {
+      "SharedInformation": "全エージェントが知っている情報",
+      "PrivateInformation": "各エージェント固有の情報",
+      "PayoffStructure": "(任意) 報酬/ペナルティ構造",
+      "ExperimentConditions": ["条件1", "条件2"]
+    },
+    "Logging": {
+      "ContentToRecord": "シミュレーション中に記録するデータ",
+      "LogFormat": "ログデータの構造",
+      "AnalysisMetrics": "シミュレーション結果を評価する指標",
+      "VerificationMethod": "指標を使って仮説をどのように検証するか"
+    }
+  },
 
-**実験計画:**
-- "Experimental Conditions": 操作する独立変数
-- "Baseline": 比較のためのベースライン条件
-- "Parameter Sweep": (任意) 探索するパラメータ範囲
+  "RiskFactorsAndLimitations": ["リスク1", "リスク2"]
+}
+```
 
-**ログと分析:**
-- "Logging Content": シミュレーション中に記録するデータ
-- "Log Format": ログデータの構造
-- "Analysis Metrics": シミュレーション結果を評価する指標
-- "Verification Method": 指標を使って仮説をどのように検証するか
-
-**リスク:**
-- "Risk Factors and Limitations": 潜在的なリスク、スケーラビリティの懸念、一般化可能性の問題"""
+**重要:** この正確なネスト構造を使用し、キー名は英語のままにしてください。値のみ日本語で記述してください。"""
 
 # Japanese system prompt
 system_prompt_ja = """あなたは経験豊富な計算社会科学者およびマルチエージェントシステム研究者であり、ワクワクするような助成金申請書に似た、マルチエージェントシミュレーションのためのインパクトの高い研究アイデアを提案することを目指しています。新しいアイデアや実験を自由に提案してください。必ず新規性があるものにしてください。非常に創造的に、既存の枠にとらわれずに考えてください。各提案は、社会現象、エージェントの行動、または創発ダイナミクスに関するシンプルでエレガントな問い、観察、または仮説から生まれるべきです。例えば、新しい可能性を探求したり、社会シミュレーションにおける既存の仮定に挑戦する、非常に興味深くシンプルな介入や調査が含まれる可能性があります。提案が既存文献とどのように異なるかを明確に説明してください。

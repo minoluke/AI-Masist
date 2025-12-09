@@ -2,7 +2,7 @@
 実験タスクとメトリクスの定義
 新しい実験を追加する場合はここに追記してください
 
-MASist JSON形式:
+MASist JSON形式（ネスト構造・英語キー統一）:
 - Title: タイトル
 - Name: 実験名（キー）
 - SimulationRequest: シミュレーション要求
@@ -10,18 +10,19 @@ MASist JSON形式:
   - Purpose: 目的
   - ResearchQuestions: 研究質問
   - Hypotheses: 仮説
-  - Other: その他（任意）
+  - RelatedWork: 関連研究（任意）
+  - Abstract: アブストラクト（任意）
 - SimulationRequirements: シミュレーション要件
   - Agents: エージェント情報
   - Environment: 環境情報
   - Protocol: プロトコル
-  - Rules: ルール
-- Logging: ログ・分析指標
-  - RecordContents: 記録すべき内容
-  - Format: ログ形式
-  - AnalysisMetrics: 分析指標
-  - HypothesisVerification: 仮説検証方法
-- Other: その他（任意）
+  - Rules: ルール（ExperimentConditionsを含む）
+  - Logging: ログ・分析指標（★ここに移動）
+    - RecordContents: 記録すべき内容
+    - Format: ログ形式
+    - AnalysisMetrics: 分析指標
+    - HypothesisVerification: 仮説検証方法
+- RiskFactorsAndLimitations: リスクと制限（任意）
 """
 
 # =============================================================================
@@ -80,30 +81,29 @@ TPGG_TASK_DESC = {
                 {"name": "UNFAIRINF", "T": 22, "R": [6, 6, 6, 6], "sum_R": 24, "description": "**多めの要求**かつ**均等割り不可**"},
                 {"name": "CONTROL", "T": 22, "R": None, "sum_R": None, "description": "**ルールなし**（ベースライン）"}
             ]
+        },
+        "Logging": {
+            "RecordContents": [
+                "設定情報: どの設定（FAIRSUFF, FAIRINF, etc.）で行ったか",
+                "ラウンド情報: ラウンド番号",
+                "行動: 各メンバーの出した額 ($c_1, c_2, c_3, c_4$)、合計出した額 ($C$)",
+                "結果: しきい値達成の有無（True/False）",
+                "利得: 各メンバーの得点 ($\\pi_1, \\pi_2, \\pi_3, \\pi_4$)",
+                "ルールとの関係（R11-20のみ）: 各メンバーの**ルールを守ったかのフラグ**（$c_i = R_i$ ならTrue、そうでないならFalse）"
+            ],
+            "Format": "CSV または JSONL（1行が1ラウンド）",
+            "AnalysisMetrics": [
+                "**しきい値達成率:** 20ラウンド中、しきい値 ($T$) を達成したラウンドの割合（成功の割合）。",
+                "**平均の出した額:** グループ全体の1ラウンドあたりの**平均拠出額**（$\\text{Average } C$）。",
+                "**必要額よりどれだけ多く出たか（過剰分）:** $\\text{Average } (C - T)$。しきい値達成ラウンドのみ、または全ラウンドで計算。これが**「無駄」**の指標となる。",
+                "**ルールを守った割合（R11-20のみ）:** 各メンバーが、提示されたルール額 ($R_i$) と**同じ額を拠出した割合**。",
+                "**10ラウンド目→11ラウンド目の変化:** ルール導入前後（R10とR11以降）での上記指標の**変化率**（ルール導入効果）。"
+            ],
+            "HypothesisVerification": "各条件間で達成率・遵守率・過剰拠出を比較し、仮説①〜④を統計的に検証する。t検定やANOVAなどを用いて条件間の有意差を確認する。"
         }
     },
 
-    "Logging": {
-        "RecordContents": [
-            "設定情報: どの設定（FAIRSUFF, FAIRINF, etc.）で行ったか",
-            "ラウンド情報: ラウンド番号",
-            "行動: 各メンバーの出した額 ($c_1, c_2, c_3, c_4$)、合計出した額 ($C$)",
-            "結果: しきい値達成の有無（True/False）",
-            "利得: 各メンバーの得点 ($\\pi_1, \\pi_2, \\pi_3, \\pi_4$)",
-            "ルールとの関係（R11-20のみ）: 各メンバーの**ルールを守ったかのフラグ**（$c_i = R_i$ ならTrue、そうでないならFalse）"
-        ],
-        "Format": "CSV または JSONL（1行が1ラウンド）",
-        "AnalysisMetrics": [
-            "**しきい値達成率:** 20ラウンド中、しきい値 ($T$) を達成したラウンドの割合（成功の割合）。",
-            "**平均の出した額:** グループ全体の1ラウンドあたりの**平均拠出額**（$\\text{Average } C$）。",
-            "**必要額よりどれだけ多く出たか（過剰分）:** $\\text{Average } (C - T)$。しきい値達成ラウンドのみ、または全ラウンドで計算。これが**「無駄」**の指標となる。",
-            "**ルールを守った割合（R11-20のみ）:** 各メンバーが、提示されたルール額 ($R_i$) と**同じ額を拠出した割合**。",
-            "**10ラウンド目→11ラウンド目の変化:** ルール導入前後（R10とR11以降）での上記指標の**変化率**（ルール導入効果）。"
-        ],
-        "HypothesisVerification": "各条件間で達成率・遵守率・過剰拠出を比較し、仮説①〜④を統計的に検証する。t検定やANOVAなどを用いて条件間の有意差を確認する。"
-    },
-
-    "Other": ""
+    "RiskFactorsAndLimitations": []
 }
 
 TPGG_METRICS = [
@@ -165,26 +165,25 @@ TPGG_QUICK_TASK_DESC = {
                 {"name": "FAIRSUFF", "T": 20, "R": [5, 5, 5, 5], "sum_R": 20, "description": "必要額ちょうど＋均等割りOK"},
                 {"name": "CONTROL", "T": 20, "R": None, "sum_R": None, "description": "ルールなし（ベースライン）"}
             ]
+        },
+        "Logging": {
+            "RecordContents": [
+                "設定情報、ラウンド番号",
+                "各メンバーの拠出額、合計拠出額",
+                "しきい値達成の有無、各メンバーの得点"
+            ],
+            "Format": "CSV または JSONL",
+            "AnalysisMetrics": [
+                "しきい値達成率",
+                "平均拠出額",
+                "過剰拠出",
+                "ルール遵守率（後半のみ）"
+            ],
+            "HypothesisVerification": "条件間で達成率・遵守率を比較"
         }
     },
 
-    "Logging": {
-        "RecordContents": [
-            "設定情報、ラウンド番号",
-            "各メンバーの拠出額、合計拠出額",
-            "しきい値達成の有無、各メンバーの得点"
-        ],
-        "Format": "CSV または JSONL",
-        "AnalysisMetrics": [
-            "しきい値達成率",
-            "平均拠出額",
-            "過剰拠出",
-            "ルール遵守率（後半のみ）"
-        ],
-        "HypothesisVerification": "条件間で達成率・遵守率を比較"
-    },
-
-    "Other": "テスト用軽量版: 6ラウンド、3グループ、2条件"
+    "RiskFactorsAndLimitations": ["テスト用軽量版: 6ラウンド、3グループ、2条件"]
 }
 
 TPGG_QUICK_METRICS = [
@@ -256,30 +255,29 @@ ABM_TASK_DESC = {
                 {"name": "Prompt_Simple", "description": "プロンプトの詳細度 簡潔"},
                 {"name": "Prompt_Detailed", "description": "プロンプトの詳細度 詳細"}
             ]
+        },
+        "Logging": {
+            "RecordContents": [
+                "時刻 t, エージェントID i",
+                "状態前後（採用状態，属性の要約）",
+                "LLMプロンプトIDとその要約（完全なテキストは容量の都合で別ストレージに保存）",
+                "LLM応答（選択肢と理由テキスト）",
+                "実際に適用された行動コード",
+                "環境のサマリ（全体採用率，価格，政策レベル）"
+            ],
+            "Format": "JSONL（1行が1エージェント×1ターン）",
+            "AnalysisMetrics": [
+                "マクロパターン：\n- 採用率曲線（時間 t に対する採用率）\n- 50% / 80% 採用到達時間",
+                "行動の多様性・異質性：\n- ターンごとの行動分布のエントロピー\n- 属性別の採用率のばらつき",
+                "パス依存性：\n- 初期ショック有無でのマクロパターン差分",
+                "現実データへの適合度（実データがある場合）：\n- 採用率系列に対する RMSE, MAE\n- 分布類似度（KLダイバージェンスなど）",
+                "LLM vs 従来ABMの比較指標：\n- 同一条件でのマクロ指標の差分\n- マイクロレベルでの選択の相関（どの程度同じ行動を選んでいるか）"
+            ],
+            "HypothesisVerification": "H1（マクロパターン再現＋多様性）：\n- 従来ABMとLLMハイブリッドで，採用率曲線を重ねて比較し，RMSEが小さいかどうかを確認。\n- 同時に，行動分布エントロピーや属性別ばらつきを比較し，LLMモデルの方が多様性が高いか検証。\n\nH2（現実データへのフィット）：\n- 実観測データがある場合，それぞれのモデルの採用率系列に対するRMSE/MAEを計算し，LLMモデルが有意に低いか統計的検定。\n\nH3（異質性表現）：\n- プロンプトで指定した性格・価値観ごとに行動傾向（協調的か，自利的かなど）を集計し，設計した異質性が実際の行動分布に反映されているかを確認。"
         }
     },
 
-    "Logging": {
-        "RecordContents": [
-            "時刻 t, エージェントID i",
-            "状態前後（採用状態，属性の要約）",
-            "LLMプロンプトIDとその要約（完全なテキストは容量の都合で別ストレージに保存）",
-            "LLM応答（選択肢と理由テキスト）",
-            "実際に適用された行動コード",
-            "環境のサマリ（全体採用率，価格，政策レベル）"
-        ],
-        "Format": "JSONL（1行が1エージェント×1ターン）",
-        "AnalysisMetrics": [
-            "マクロパターン：\n- 採用率曲線（時間 t に対する採用率）\n- 50% / 80% 採用到達時間",
-            "行動の多様性・異質性：\n- ターンごとの行動分布のエントロピー\n- 属性別の採用率のばらつき",
-            "パス依存性：\n- 初期ショック有無でのマクロパターン差分",
-            "現実データへの適合度（実データがある場合）：\n- 採用率系列に対する RMSE, MAE\n- 分布類似度（KLダイバージェンスなど）",
-            "LLM vs 従来ABMの比較指標：\n- 同一条件でのマクロ指標の差分\n- マイクロレベルでの選択の相関（どの程度同じ行動を選んでいるか）"
-        ],
-        "HypothesisVerification": "H1（マクロパターン再現＋多様性）：\n- 従来ABMとLLMハイブリッドで，採用率曲線を重ねて比較し，RMSEが小さいかどうかを確認。\n- 同時に，行動分布エントロピーや属性別ばらつきを比較し，LLMモデルの方が多様性が高いか検証。\n\nH2（現実データへのフィット）：\n- 実観測データがある場合，それぞれのモデルの採用率系列に対するRMSE/MAEを計算し，LLMモデルが有意に低いか統計的検定。\n\nH3（異質性表現）：\n- プロンプトで指定した性格・価値観ごとに行動傾向（協調的か，自利的かなど）を集計し，設計した異質性が実際の行動分布に反映されているかを確認。"
-    },
-
-    "Other": ""
+    "RiskFactorsAndLimitations": []
 }
 
 ABM_METRICS = [
@@ -352,30 +350,29 @@ PGG_SANCTION_TASK_DESC = {
                 {"name": "Sanction_Strength", "description": "制裁強度"},
                 {"name": "Initial_Institution", "description": "初期の制度分布"}
             ]
+        },
+        "Logging": {
+            "RecordContents": [
+                "run_id, round, agent_id, model_type",
+                "institution_choice",
+                "contribution",
+                "sanctions_given / sanctions_received",
+                "payoff_base / payoff_sanction / payoff_total",
+                "行動分類（高拠出／低拠出）",
+                "プロンプト・推論テキスト・最終回答"
+            ],
+            "Format": "1 行 = run × round × agent",
+            "AnalysisMetrics": [
+                "協力関連：\n- 平均拠出額\n- 高拠出者比率\n- フリーライダー比率",
+                "制度関連：\n- SI 選択率\n- punish/reward 比率",
+                "成果関連：\n- 平均利得\n- 制裁コスト総額",
+                "行動パターン：\n- 協力維持／崩壊／固定戦略の分類"
+            ],
+            "HypothesisVerification": "H1: モデル種類ごとに協力率・拠出分布を比較\nH2: SI 選択率と制裁行動の違いを比較\nH3: 制裁コストと協力崩壊の相関を分析"
         }
     },
 
-    "Logging": {
-        "RecordContents": [
-            "run_id, round, agent_id, model_type",
-            "institution_choice",
-            "contribution",
-            "sanctions_given / sanctions_received",
-            "payoff_base / payoff_sanction / payoff_total",
-            "行動分類（高拠出／低拠出）",
-            "プロンプト・推論テキスト・最終回答"
-        ],
-        "Format": "1 行 = run × round × agent",
-        "AnalysisMetrics": [
-            "協力関連：\n- 平均拠出額\n- 高拠出者比率\n- フリーライダー比率",
-            "制度関連：\n- SI 選択率\n- punish/reward 比率",
-            "成果関連：\n- 平均利得\n- 制裁コスト総額",
-            "行動パターン：\n- 協力維持／崩壊／固定戦略の分類"
-        ],
-        "HypothesisVerification": "H1: モデル種類ごとに協力率・拠出分布を比較\nH2: SI 選択率と制裁行動の違いを比較\nH3: 制裁コストと協力崩壊の相関を分析"
-    },
-
-    "Other": ""
+    "RiskFactorsAndLimitations": []
 }
 
 PGG_SANCTION_METRICS = [
@@ -462,27 +459,26 @@ PGG_SELF_AWARENESS_TASK_DESC = {
                 {"name": "Study2", "description": "Study 2（プロンプト構造・推論有無・人数の違い）"},
                 {"name": "Study3", "description": "Study 3（プロンプト構造・推論有無・人数の違い）"}
             ]
+        },
+        "Logging": {
+            "RecordContents": [
+                "ゲーム ID、モデル構成、プロンプト属性、Name/No-Name",
+                "各ラウンドの寄与額",
+                "各ラウンドの利得",
+                "各ラウンドの累積得点",
+                "各ラウンドの総寄与額",
+                "Study1 のみ：推論テキスト、推論の協力性スコア（0〜1）"
+            ],
+            "Format": "後からゲーム×ラウンド×プレイヤー単位で復元できる構造にする",
+            "AnalysisMetrics": [
+                "主要指標：\n- 平均寄与額\n- Name − No-Name の寄与額差分",
+                "補助指標：\n- ラウンドごとの寄与軌跡\n- プレイヤー間の寄与一致度\n- フリーライド度\n- Study1 の推論協力性スコアと寄与額の相関"
+            ],
+            "HypothesisVerification": "仮説1：Name / No-Name の平均寄与額を統計比較（t検定・混合効果モデルなど）。\n\n仮説2：寄与額を従属変数とし、要因（自己認識 × プロンプト）の交互作用の有意性を分析。\n\n仮説3：モデル別・人数別で同様の比較を行い、効果のロバスト性を評価。"
         }
     },
 
-    "Logging": {
-        "RecordContents": [
-            "ゲーム ID、モデル構成、プロンプト属性、Name/No-Name",
-            "各ラウンドの寄与額",
-            "各ラウンドの利得",
-            "各ラウンドの累積得点",
-            "各ラウンドの総寄与額",
-            "Study1 のみ：推論テキスト、推論の協力性スコア（0〜1）"
-        ],
-        "Format": "後からゲーム×ラウンド×プレイヤー単位で復元できる構造にする",
-        "AnalysisMetrics": [
-            "主要指標：\n- 平均寄与額\n- Name − No-Name の寄与額差分",
-            "補助指標：\n- ラウンドごとの寄与軌跡\n- プレイヤー間の寄与一致度\n- フリーライド度\n- Study1 の推論協力性スコアと寄与額の相関"
-        ],
-        "HypothesisVerification": "仮説1：Name / No-Name の平均寄与額を統計比較（t検定・混合効果モデルなど）。\n\n仮説2：寄与額を従属変数とし、要因（自己認識 × プロンプト）の交互作用の有意性を分析。\n\n仮説3：モデル別・人数別で同様の比較を行い、効果のロバスト性を評価。"
-    },
-
-    "Other": ""
+    "RiskFactorsAndLimitations": []
 }
 
 PGG_SELF_AWARENESS_METRICS = [

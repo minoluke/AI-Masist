@@ -10,7 +10,7 @@ from masist.llm import get_response_from_llm, extract_json_between_markers
 from masist.treesearch.backend import get_ai_client
 
 
-report_summarizer_sys_msg = """You are an expert machine learning researcher.
+report_summarizer_sys_msg = """You are an expert multi-agent simulation researcher.
 You are given multiple experiment logs, each representing a node in a stage of exploring scientific ideas and implementations.
 Your task is to aggregate these logs and provide scientifically insightful information.
 
@@ -207,7 +207,7 @@ def update_summary(
     )
     try:
         response = get_response_from_llm(
-            prompt, client, model, "You are an expert machine learning researcher."
+            prompt, client, model, "You are an expert multi-agent simulation researcher."
         )
         summary_json = extract_json_between_markers(response[0])
         assert summary_json
