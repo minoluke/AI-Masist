@@ -409,16 +409,18 @@ class Journal:
     def get_best_node(
         self,
         only_good=True,
-        use_val_metric_only=False,
         cfg=None,
         task_desc=None,
     ) -> None | Node:
         """
-        Return the best solution found so far.
+        Return the best solution found so far using LLM-based evaluation.
+
+        For MASist exploratory experiments, best node selection is done via
+        LLM evaluation rather than metric comparison, as optimization direction
+        is often unclear in multi-agent simulations.
 
         Args:
             only_good: If True, only consider non-buggy nodes
-            use_val_metric_only: If True, use only validation metric for selection
             cfg: Configuration object
             task_desc: Experiment description including hypothesis and goals
         """
@@ -428,9 +430,6 @@ class Journal:
                 return None
         else:
             nodes = self.nodes
-
-        if use_val_metric_only:
-            return max(nodes, key=lambda n: n.metric)
 
         if len(nodes) == 1:
             return nodes[0]

@@ -578,6 +578,14 @@ Your research idea:\n\n
         issues = self._identify_issues(journal)
         progress = self._analyze_progress(journal)
 
+        # Extract best node info for prompt
+        best_node = metrics.get("best_node")
+        best_node_id = best_node.id[:8] if best_node else "N/A"
+        selection_reasoning = (
+            best_node.analysis[:300] if best_node and best_node.analysis else "N/A"
+        )
+        metrics_summary = metrics.get("metrics_summary", "N/A")
+
         # Create prompt for the LLM
         prompt = f"""
         Based on the current experimental progress, generate focused goals for the next sub-stage.
@@ -588,7 +596,9 @@ Your research idea:\n\n
         Current Progress:
         - Total attempts: {metrics['total_nodes']}
         - Successful implementations: {metrics['good_nodes']}
-        - Best performance: {metrics['best_metric']['value'] if metrics['best_metric'] else 'N/A'}
+        - Metrics tracked: {metrics_summary}
+        - Selected implementation: {best_node_id}
+        - Selection reasoning: {selection_reasoning}
         - Convergence status: {progress['convergence_status']}
 
         Current Issues:
@@ -880,12 +890,16 @@ Your research idea:\n\n
                     prompt_parts.append(f"- {analysis['analysis']}")
 
             # Format other metrics and findings
+            best_node = previous_results['metrics'].get('best_node')
+            best_node_id = best_node.id[:8] if best_node else 'N/A'
+            tracked_metrics = previous_results['metrics'].get('metrics_summary', 'N/A')
             metrics_summary = (
                 f"Progress Summary:\n"
                 f"- Total attempts: {previous_results['metrics']['total_nodes']}\n"
                 f"- Successful implementations: {previous_results['metrics']['good_nodes']}\n"
                 f"- Failed attempts: {previous_results['metrics']['buggy_nodes']}\n"
-                f"- Best performance: {previous_results['metrics']['best_metric']['value'] if previous_results['metrics']['best_metric'] else 'N/A'}\n"
+                f"- Metrics tracked: {tracked_metrics}\n"
+                f"- Selected implementation: {best_node_id}\n"
                 f"- Issues identified: {', '.join(previous_results['issues'])}\n"
                 f"- Progress status: {previous_results['progress']['convergence_status']}"
             )
@@ -1051,7 +1065,8 @@ Your research idea:\n\n
             "total_nodes": len(journal.nodes),
             "good_nodes": len(journal.good_nodes),
             "buggy_nodes": len(journal.buggy_nodes),
-            "best_metric": None,
+            "best_node": None,
+            "metrics_summary": "",
             "node_summaries": [],
             "vlm_feedback": [],
         }
@@ -1069,22 +1084,17 @@ Your research idea:\n\n
 
         best_node = journal.get_best_node(cfg=self.cfg)
         if best_node:
-            metrics["best_metric"] = {
-                "value": best_node.metric.value,
-                "name": (
-                    best_node.metric.name
-                    if hasattr(best_node.metric, "name")
-                    else "validation_metric"
-                ),
-                "maximize": (
-                    best_node.metric.maximize
-                    if hasattr(best_node.metric, "maximize")
-                    else False
-                ),
-                "analysis": (
-                    best_node.analysis if hasattr(best_node, "analysis") else None
-                ),
-            }
+            metrics["best_node"] = best_node
+
+            # Extract metric names for summary
+            if best_node.metric and best_node.metric.value:
+                metric_value = best_node.metric.value
+                if isinstance(metric_value, dict) and "metric_names" in metric_value:
+                    metric_names = [m["metric_name"] for m in metric_value["metric_names"]]
+                    metrics["metrics_summary"] = ", ".join(metric_names)
+                else:
+                    # Legacy format
+                    metrics["metrics_summary"] = best_node.metric.name or "value"
 
         return metrics
 

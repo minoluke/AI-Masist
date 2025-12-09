@@ -123,7 +123,6 @@ class MetricValue(DataClassJsonMixin):
         "metric_names": [
           {
             "metric_name": str,
-            "lower_is_better": bool,
             "description": str,
             "data": [
                 {"dataset_name": str, "final_value": float, "best_value": float},
@@ -189,18 +188,16 @@ class MetricValue(DataClassJsonMixin):
         return comp if should_maximize else not comp
 
     def _should_maximize(self) -> bool:
-        """Determine if we should maximize based on the metric format"""
-        if isinstance(self.value, dict):
-            # New format
-            if "metric_names" in self.value:
-                # Use the first metric's lower_is_better value
-                try:
-                    return not self.value["metric_names"][0]["lower_is_better"]
-                except Exception as e:
-                    print(f"error during metric value: {e}")
-            # Old format
-            return bool(self.maximize)
-        # Single value case
+        """Determine if we should maximize based on the metric format.
+
+        Note: For MASist exploratory experiments, optimization direction is not
+        determined by metrics. Best node selection is done via LLM evaluation.
+        This method is kept for backwards compatibility with legacy formats.
+        """
+        # For new format with metric_names, always return True (not used for comparison)
+        if isinstance(self.value, dict) and "metric_names" in self.value:
+            return True
+        # Old format / single value case
         return bool(self.maximize)
 
     def __str__(self) -> str:
@@ -209,11 +206,6 @@ class MetricValue(DataClassJsonMixin):
             if "metric_names" in self.value:
                 parts = []
                 for metric in self.value["metric_names"]:
-                    opt_dir = (
-                        "↓"
-                        if "lower_is_better" in metric and metric["lower_is_better"]
-                        else "↑"
-                    )
                     try:
                         values_str = ", ".join(
                             f"{d['dataset_name']}:(final={d['final_value']:.4f}, best={d['best_value']:.4f})"
@@ -222,7 +214,7 @@ class MetricValue(DataClassJsonMixin):
                     except Exception as e:
                         print(f"error during metric value: {e}")
                         values_str = "None"
-                    parts.append(f"{metric['metric_name']}{opt_dir}[{values_str}]")
+                    parts.append(f"{metric['metric_name']}[{values_str}]")
                 return "Metrics(" + "; ".join(parts) + ")"
             # Old format
             opt_dir = "↓" if not self.maximize else "↑"

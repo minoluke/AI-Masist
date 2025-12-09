@@ -20,7 +20,7 @@ review_func_spec = FunctionSpec(
             "summary",
         ],
     },
-    description="Submit a review evaluating the output of the training script.",
+    description="Submit a review evaluating the output of the simulation script.",
 )
 
 vlm_feedback_spec = FunctionSpec(
@@ -47,7 +47,7 @@ vlm_feedback_spec = FunctionSpec(
             },
             "vlm_feedback_summary": {
                 "type": "string",
-                "description": "Summarize the feedback from the VLM. If the task involves generative modeling, make sure to focus on the generated samples.",
+                "description": "Summarize the feedback from the VLM. Focus on agent behavior patterns, cooperation dynamics, and condition comparisons.",
             },
         },
         "required": ["plot_analyses", "valid_plots_received", "vlm_feedback_summary"],
@@ -72,11 +72,7 @@ metric_parse_spec = FunctionSpec(
                     "properties": {
                         "metric_name": {
                             "type": "string",
-                            "description": "Specify the metric name clearly. Avoid vague terms like 'train,' 'val,' or 'test.' Instead, use precise labels such as 'train accuracy,' 'validation loss,' or 'test F1 score,' etc.",
-                        },
-                        "lower_is_better": {
-                            "type": "boolean",
-                            "description": "Whether lower values are better for this metric",
+                            "description": "Specify the metric name clearly. Use precise labels such as 'cooperation_rate,' 'threshold_achievement,' 'average_contribution,' etc.",
                         },
                         "description": {
                             "type": "string",
@@ -89,7 +85,7 @@ metric_parse_spec = FunctionSpec(
                                 "properties": {
                                     "dataset_name": {
                                         "type": "string",
-                                        "description": "The name of the dataset. Never include 'train', 'val', or 'test' in the dataset name.",
+                                        "description": "The name of the condition/scenario being tested.",
                                     },
                                     "final_value": {
                                         "type": "number",
@@ -111,7 +107,6 @@ metric_parse_spec = FunctionSpec(
                     "required": [
                         "data",
                         "metric_name",
-                        "lower_is_better",
                         "description",
                     ],
                 },

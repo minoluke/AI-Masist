@@ -151,7 +151,7 @@ def run_stage1_and_get_best_node(config, max_steps: int = 10) -> Node:
         success = agent.run(max_steps=max_steps)
 
         if success and journal.good_nodes:
-            best_node = journal.get_best_node(only_good=True, use_val_metric_only=True)
+            best_node = journal.get_best_node(only_good=True)
             print(f"[PREP] Stage 1 complete. Best node: {best_node.id[:8]}")
             return best_node, journal
         else:
@@ -238,7 +238,7 @@ Sub-stage goals:
             print(f"  - Buggy nodes: {len(stage2_journal.buggy_nodes)}")
 
             if stage2_journal.good_nodes:
-                best_stage2_node = stage2_journal.get_best_node(only_good=True, use_val_metric_only=True)
+                best_stage2_node = stage2_journal.get_best_node(only_good=True)
                 print(f"\n[TEST] Stage 2 best node: {best_stage2_node.id[:8]}")
                 print(f"  - Metric: {best_stage2_node.metric}")
 
@@ -306,7 +306,7 @@ def test_stage3_creative_research():
 
         best_stage2_node = None
         if stage2_journal.good_nodes:
-            best_stage2_node = stage2_journal.get_best_node(only_good=True, use_val_metric_only=True)
+            best_stage2_node = stage2_journal.get_best_node(only_good=True)
             print(f"[TEST] Stage 2 best node: {best_stage2_node.id[:8]}")
         else:
             # Use Stage 1 best as fallback
@@ -345,7 +345,7 @@ Sub-stage goals:
             print(f"  - Good nodes: {len(stage3_journal.good_nodes)}")
 
             if stage3_journal.good_nodes:
-                best_stage3_node = stage3_journal.get_best_node(only_good=True, use_val_metric_only=True)
+                best_stage3_node = stage3_journal.get_best_node(only_good=True)
                 print(f"\n[TEST] Stage 3 best node: {best_stage3_node.id[:8]}")
                 print(f"  - Metric: {best_stage3_node.metric}")
 
@@ -406,7 +406,7 @@ def test_stage4_ablation_studies():
         ) as agent:
             agent.run(max_steps=3)
 
-        best_stage2_node = stage2_journal.get_best_node(only_good=True, use_val_metric_only=True) if stage2_journal.good_nodes else best_stage1_node
+        best_stage2_node = stage2_journal.get_best_node(only_good=True) if stage2_journal.good_nodes else best_stage1_node
 
         # Stage 3
         print("\n[TEST] Running Stage 3 (quick)...")
@@ -421,7 +421,7 @@ def test_stage4_ablation_studies():
         ) as agent:
             agent.run(max_steps=3)
 
-        best_stage3_node = stage3_journal.get_best_node(only_good=True, use_val_metric_only=True) if stage3_journal.good_nodes else best_stage2_node
+        best_stage3_node = stage3_journal.get_best_node(only_good=True) if stage3_journal.good_nodes else best_stage2_node
 
         # Stage 4
         print("\n[TEST] Starting Stage 4 (Ablation Studies)...")
@@ -455,7 +455,7 @@ Sub-stage goals:
             print(f"  - Good nodes: {len(stage4_journal.good_nodes)}")
 
             if stage4_journal.good_nodes:
-                best_stage4_node = stage4_journal.get_best_node(only_good=True, use_val_metric_only=True)
+                best_stage4_node = stage4_journal.get_best_node(only_good=True)
                 print(f"\n[TEST] Stage 4 best node: {best_stage4_node.id[:8]}")
                 print(f"  - Metric: {best_stage4_node.metric}")
 
@@ -536,7 +536,7 @@ def test_all_stages_with_agent_manager():
             print(f"    - Total nodes: {len(journal)}")
             print(f"    - Good nodes: {len(journal.good_nodes)}")
             if journal.good_nodes:
-                best = journal.get_best_node(only_good=True, use_val_metric_only=True)
+                best = journal.get_best_node(only_good=True)
                 if best:
                     print(f"    - Best metric: {best.metric}")
 

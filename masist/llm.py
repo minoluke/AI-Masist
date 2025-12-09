@@ -31,6 +31,8 @@ AVAILABLE_LLMS = [
     "o3-mini",
     "o3-mini-2025-01-31",
     # DeepSeek Models
+    "deepseek-chat",
+    "deepseek-reasoner",
     "deepseek-coder-v2-0724",
     "deepcoder-14b",
     # Llama 3 models
@@ -346,6 +348,34 @@ def get_response_from_llm(
         )
         content = response.choices[0].message.content
         new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
+    elif model == "deepseek-chat":
+        new_msg_history = msg_history + [{"role": "user", "content": msg}]
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_message},
+                *new_msg_history,
+            ],
+            temperature=temperature,
+            max_tokens=MAX_NUM_TOKENS,
+            n=1,
+            stop=None,
+        )
+        content = response.choices[0].message.content
+        new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
+    elif model == "deepseek-reasoner":
+        new_msg_history = msg_history + [{"role": "user", "content": msg}]
+        response = client.chat.completions.create(
+            model="deepseek-reasoner",
+            messages=[
+                {"role": "user", "content": system_message},
+                *new_msg_history,
+            ],
+            n=1,
+            stop=None,
+        )
+        content = response.choices[0].message.content
+        new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
     elif model == "deepseek-coder-v2-0724":
         new_msg_history = msg_history + [{"role": "user", "content": msg}]
         response = client.chat.completions.create(
@@ -501,6 +531,24 @@ def create_client(model) -> tuple[Any, str]:
     elif "o1" in model or "o3" in model:
         print(f"Using OpenAI API with model {model}.")
         return openai.OpenAI(), model
+    elif model == "deepseek-chat":
+        print(f"Using DeepSeek API with {model}.")
+        return (
+            openai.OpenAI(
+                api_key=os.environ["DEEPSEEK_API_KEY"],
+                base_url="https://api.deepseek.com",
+            ),
+            model,
+        )
+    elif model == "deepseek-reasoner":
+        print(f"Using DeepSeek API with {model}.")
+        return (
+            openai.OpenAI(
+                api_key=os.environ["DEEPSEEK_API_KEY"],
+                base_url="https://api.deepseek.com",
+            ),
+            model,
+        )
     elif model == "deepseek-coder-v2-0724":
         print(f"Using OpenAI API with {model}.")
         return (

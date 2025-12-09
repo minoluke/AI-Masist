@@ -266,10 +266,10 @@ def annotate_history(journal, cfg=None):
             retry_count = 0
             while retry_count < max_retries:
                 try:
-                    if cfg.agent.get("summary", None) is not None:
+                    if cfg and cfg.agent.get("summary", None) is not None:
                         model = cfg.agent.summary.model
                     else:
-                        model = "gpt-4o-2024-08-06"
+                        model = "deepseek-chat"  # AI-MASISTデフォルト
                     client = get_ai_client(model)
                     response = get_response_from_llm(
                         overall_plan_summarizer_prompt.format(
@@ -338,10 +338,10 @@ def overall_summarize(journals, cfg=None):
             ]
             return [get_node_log(n) for n in good_leaf_nodes]
         elif idx == 0:
-            if cfg.agent.get("summary", None) is not None:
+            if cfg and cfg.agent.get("summary", None) is not None:
                 model = cfg.agent.summary.get("model", "")
             else:
-                model = "gpt-4o-2024-08-06"
+                model = "deepseek-chat"  # AI-MASISTデフォルト
             client = get_ai_client(model)
             summary_json = get_stage_summary(journal, stage_name, model, client)
             return summary_json

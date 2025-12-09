@@ -522,7 +522,6 @@ const setNodeInfo = (code, plan, plot_code, plot_plan, metrics = null, exc_type 
               metricsContent += `<div class="metric-group">`;
               metricsContent += `<h4>${metric.metric_name}</h4>`;
               metricsContent += `<p><strong>Description:</strong> ${metric.description || 'N/A'}</p>`;
-              metricsContent += `<p><strong>Optimization:</strong> ${metric.lower_is_better ? 'Minimize' : 'Maximize'}</p>`;
 
               // Create table for dataset values
               metricsContent += `<table class="metric-table">

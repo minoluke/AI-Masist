@@ -114,6 +114,87 @@ TPGG_METRICS = [
 ]
 
 
+# =============================================================================
+# TPGG_QUICK (Threshold Public Goods Game - Quick Test Version)
+# テスト用の軽量バージョン: ラウンド数・グループ数・条件数を削減
+# =============================================================================
+TPGG_QUICK_TASK_DESC = {
+    "Title": "Threshold Public Goods Game (TPGG) - Quick Test",
+    "Name": "tpgg_quick",
+
+    "SimulationRequest": {
+        "Background": "【テスト用軽量版】4人グループでしきい値公共財ゲームを行い、ルールの性質が行動に与える影響を調査する。",
+        "Purpose": "ルールが「ちょうど必要な合計」か「必要以上に多い合計」かによって、LLMエージェントの行動がどう変わるかを調べる。",
+        "ResearchQuestions": [
+            "ルールが「多め」だと行動が乱れやすいか？",
+            "必要分ちょうどのルールは安定した協力を生むか？"
+        ],
+        "Hypotheses": [
+            "① 多めに要求されたルールは守る人が減りやすい",
+            "② 均等割りできる場合、協力がまとまりやすい"
+        ],
+        "Other": ""
+    },
+
+    "SimulationRequirements": {
+        "Agents": {
+            "Count": 4,
+            "RolesAndDescriptions": "4人とも同じ立場。各ラウンドで持ちトークン10のうち何トークン拠出するか選ぶ。",
+            "State": "過去の拠出額、グループ合計、得点、ルール（後半のみ）",
+            "StateUpdate": "ラウンド終了時に情報を記録",
+            "EnvironmentInteraction": "全員の合計がしきい値を超えればご褒美獲得"
+        },
+        "Environment": {
+            "Structure": "4人の閉じたグループ",
+            "StateSpec": "しきい値(T)、ご褒美額(V)、各プレイヤーの拠出額、合計拠出額、ラウンド番号",
+            "UpdateRules": "各ラウンド終了時に合計計算、しきい値判定、利得計算"
+        },
+        "Protocol": {
+            "TurnStructure": "1回のゲームは**6ラウンド**（テスト用に短縮）。各ラウンドは、①4人が同時に出す額を決める → ②合計額を見る → ③しきい値判定 → ④得点返却。",
+            "TerminationCondition": "6ラウンド終了",
+            "TrialCount": "1つの設定につき**3グループ**（テスト用に削減）",
+            "PhaseStructure": "**ラウンド1〜3:** ルールなし、**ラウンド4〜6:** 設定に応じたルールを提示",
+            "DialogFlow": "環境→エージェントに状況提示、エージェント→環境に拠出額（0〜10の整数）を返す"
+        },
+        "Rules": {
+            "SharedInfo": "各自の持ちトークン10、しきい値(T)、ラウンド後の合計拠出額、自分の得点",
+            "PrivateInfo": "他メンバーの実際の拠出額（自分の分のみ見える）",
+            "DecisionRules": "0〜10の整数から1つ選んで拠出",
+            "PayoffStructure": "しきい値未達成: π_i = 10 - c_i、しきい値達成: π_i = 10 - c_i + V (V=10)",
+            "ExperimentConditions": [
+                {"name": "FAIRSUFF", "T": 20, "R": [5, 5, 5, 5], "sum_R": 20, "description": "必要額ちょうど＋均等割りOK"},
+                {"name": "CONTROL", "T": 20, "R": None, "sum_R": None, "description": "ルールなし（ベースライン）"}
+            ]
+        }
+    },
+
+    "Logging": {
+        "RecordContents": [
+            "設定情報、ラウンド番号",
+            "各メンバーの拠出額、合計拠出額",
+            "しきい値達成の有無、各メンバーの得点"
+        ],
+        "Format": "CSV または JSONL",
+        "AnalysisMetrics": [
+            "しきい値達成率",
+            "平均拠出額",
+            "過剰拠出",
+            "ルール遵守率（後半のみ）"
+        ],
+        "HypothesisVerification": "条件間で達成率・遵守率を比較"
+    },
+
+    "Other": "テスト用軽量版: 6ラウンド、3グループ、2条件"
+}
+
+TPGG_QUICK_METRICS = [
+    "threshold_achievement_rate",
+    "average_contribution",
+    "excess_contribution",
+    "rule_compliance_rate",
+]
+
+
 
 
 # =============================================================================
@@ -423,6 +504,11 @@ EXPERIMENTS = {
         "task_desc": TPGG_TASK_DESC,
         "metrics": TPGG_METRICS,
     },
+    "tpgg_quick": {
+        "name": "Threshold Public Goods Game (Quick Test)",
+        "task_desc": TPGG_QUICK_TASK_DESC,
+        "metrics": TPGG_QUICK_METRICS,
+    },
     "abm": {
         "name": "LLM-driven ABM vs Rule-based ABM",
         "task_desc": ABM_TASK_DESC,
@@ -440,8 +526,8 @@ EXPERIMENTS = {
     },
 }
 
-# デフォルト実験
-DEFAULT_EXPERIMENT = "tpgg"
+# デフォルト実験（テスト用軽量版をデフォルトに）
+DEFAULT_EXPERIMENT = "tpgg_quick"
 
 
 def get_experiment(name: str = None) -> dict:

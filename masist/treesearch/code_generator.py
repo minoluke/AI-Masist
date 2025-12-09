@@ -305,22 +305,17 @@ class CodeGenerator:
         """
         prompt: Any = {
             "Introduction": (
-                "あなたは MASist（LLMマルチエージェント実験プラットフォーム）のシミュレーションエンジン開発を担うAI研究者です。"
-                "前回のシミュレーションは正常に動作しましたが、さらなる改善が可能です。"
-                "以下の情報をもとに、シミュレーションの品質・精度・効率を向上させてください。"
+                "あなたは MASist（LLMマルチエージェント実験プラットフォーム）の"
+                "シミュレーションエンジン開発を担うAI研究者です。"
+                "現在の実験ステージに基づいて、実装を改善することが目標です。"
             ),
             "Research idea": self.task_desc,
             "Memory": self.memory_summary if self.memory_summary else "",
             "Previous solution": {
                 "Code": wrap_code(parent_node.code),
-                "Plan": parent_node.plan,
             },
             "Instructions": {},
         }
-
-        # メトリクス情報があれば追加
-        if parent_node.metric:
-            prompt["Previous metrics"] = str(parent_node.metric)
 
         # VLMフィードバックがあれば追加
         if parent_node.vlm_feedback_summary:
@@ -330,23 +325,8 @@ class CodeGenerator:
         if hasattr(parent_node, 'exec_time_feedback') and parent_node.exec_time_feedback:
             prompt["Feedback about execution time"] = parent_node.exec_time_feedback
 
-        # 分析結果があれば追加
-        if parent_node.analysis:
-            prompt["Previous analysis"] = parent_node.analysis
-
         prompt["Instructions"] |= self._prompt_resp_fmt
-        prompt["Instructions"] |= {
-            "Improvement guideline": [
-                "前回の実装を改善する方針を7〜10文で説明すること。",
-                "改善の観点：メトリクスの向上、シミュレーションの安定性、コードの効率性など。",
-                "改善後のコードは完全で実行可能であること（省略不可）。",
-                "Autogen を使ったマルチエージェントシミュレーションの構造を維持すること。",
-                "過度な複雑化は避け、段階的な改善を心がけること。",
-            ],
-            "Evaluation Metric(s)": self.evaluation_metrics,
-        }
         prompt["Instructions"] |= self._prompt_impl_guideline
-        prompt["Instructions"] |= self._prompt_environment
 
         # AG2リファレンスドキュメントを追加
         if self.ag2_reference:

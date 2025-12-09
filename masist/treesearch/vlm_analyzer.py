@@ -84,9 +84,9 @@ class VLMAnalyzer:
         prompt_select_plots = {
             "Introduction": (
                 "You are an experienced AI researcher analyzing experimental results. "
-                "You have been provided with plots from a machine learning experiment. "
+                "You have been provided with plots from a multi-agent simulation experiment. "
                 "Please select 10 most relevant plots to analyze. "
-                "For similar plots (e.g. generated samples at each epoch), select only at most 5 plots at a suitable interval of epochs."
+                "For similar plots (e.g. agent states at each round), select only at most 5 plots at a suitable interval of rounds."
                 "Format your response as a list of plot paths, where each plot path includes the full path to the plot file."
             ),
             "Plot paths": node.plot_paths,
@@ -155,9 +155,10 @@ class VLMAnalyzer:
                 "type": "text",
                 "text": (
                     "You are an experienced AI researcher analyzing experimental results. "
-                    "You have been provided with plots from a machine learning experiment. "
+                    "You have been provided with plots from a multi-agent simulation experiment. "
                     f"This experiment is based on the following research idea: {self.task_desc}"
                     "Please analyze these plots and provide detailed insights about the results. "
+                    "Focus on agent behavior patterns, cooperation dynamics, and condition comparisons. "
                     "If you don't receive any plots, say 'No plots received'. "
                     "Never make up plot analysis. "
                     "Please return the analyzes with strict order of uploaded images, but DO NOT include any word "

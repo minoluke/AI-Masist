@@ -401,7 +401,7 @@ def test_parallel_agent_run():
             assert len(journal) >= 2, f"Expected at least 2 nodes, got {len(journal)}"
 
             if journal.good_nodes:
-                best_node = journal.get_best_node(only_good=True, use_val_metric_only=True)
+                best_node = journal.get_best_node(only_good=True)
                 print(f"\n[TEST] Best node: {best_node.id}")
                 print(f"  - Metric: {best_node.metric}")
 
@@ -469,7 +469,7 @@ def test_parallel_agent_full_4workers():
             assert len(journal) >= 4, f"Expected at least 4 nodes, got {len(journal)}"
 
             if journal.good_nodes:
-                best_node = journal.get_best_node(only_good=True, use_val_metric_only=True)
+                best_node = journal.get_best_node(only_good=True)
                 print(f"\n[TEST] Best node: {best_node.id}")
                 print(f"  - Metric: {best_node.metric}")
 
@@ -744,7 +744,7 @@ def test_full_stage1_with_multi_seed():
                 return True
 
             # Get best node
-            best_node = journal.get_best_node(only_good=True, use_val_metric_only=True)
+            best_node = journal.get_best_node(only_good=True)
             print(f"\n[TEST] Best node from Stage 1: {best_node.id[:8]}")
             print(f"  - Metric: {best_node.metric}")
 
