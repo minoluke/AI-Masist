@@ -15,6 +15,7 @@ import traceback
 from rich import print
 
 from masist.llm import create_client, get_response_from_llm
+from masist.perform_writeup import load_idea_text
 
 MAX_FIGURES = 12
 
@@ -221,7 +222,6 @@ def filter_experiment_summaries(exp_summaries, step_name):
 
 def aggregate_plots(
     base_folder: str,
-    task_desc: str,
     model: str = "deepseek-chat",
     n_reflections: int = 5
 ) -> None:
@@ -230,7 +230,6 @@ def aggregate_plots(
 
     Args:
         base_folder: Path to the experiment folder with summary JSON files.
-        task_desc: Task description string (replaces load_idea_text).
         model: LLM model to use (default: deepseek-chat).
         n_reflections: Number of reflection steps to attempt (default: 5).
     """
@@ -245,8 +244,8 @@ def aggregate_plots(
         shutil.rmtree(figures_dir)
         print(f"Cleaned up previous figures directory")
 
-    # Use task_desc directly instead of loading from idea.md
-    idea_text = task_desc
+    # Load idea text from file (AI-Scientist-v2 compatible)
+    idea_text = load_idea_text(base_folder)
 
     exp_summaries = load_exp_summaries(base_folder)
     filtered_summaries_for_plot_agg = filter_experiment_summaries(

@@ -108,5 +108,75 @@
         ],
         "Verification Method": "Statistical tests (ANOVA) to compare sustainability and efficiency across conditions. Time-series analysis for norm convergence. NLP techniques (keyword extraction, topic modeling) on dialogue corpus to identify value negotiation themes. Correlation between dialogue content and subsequent harvest decisions.",
         "Risk Factors and Limitations": "(1) **LLM cost and variability**: Frequent LLM calls for dialogue and decisions can be expensive and non-deterministic. Mitigation: Use smaller LLMs for dialogue generation, cache responses, and set random seeds. (2) **Simplified cultural model**: Reducing culture to binary values may overlook nuances. We will incorporate Hofstede's dimensions as continuous variables in extended studies. (3) **Scalability**: Large agent counts with dialogue may be computationally heavy. We limit agents to 60 and use batched LLM calls. (4) **Generalizability**: Findings may depend on the LLM's built-in cultural biases. We will test with multiple LLM backbones (e.g., GPT-4, Llama 3) to assess robustness."
+    },
+    {
+        "Name": "rule_framing_tpgg_llm",
+        "Title": "The Framing of Rules in Threshold Public Goods Games: How LLM Agents Respond to 'Exact' vs. 'Over' Requirements",
+        "SimulationRequest": {
+            "Background": "Threshold public goods games (TPGG) are a classic model of collective action where a group must collectively contribute a minimum amount to provide a public good. Prior research has examined factors like insurance (Zhang et al., 2015), network interdependence (Yang et al., 2018), and heterogeneity. However, how the framing of the contribution rule itself\u2014specifically, whether the rule states an exact requirement or an over-requirement\u2014affects cooperation and compliance remains underexplored. With the advent of LLM-based agents that interpret and reason about rules in natural language, we can study how rule framing influences agent behavior in a more nuanced way, simulating human-like responses to institutional messages.",
+            "Purpose": "This simulation aims to investigate how different framings of the contribution rule in a TPGG affect LLM agents' cooperation levels, rule compliance, and group efficiency. We seek to understand whether framing a rule as an 'exact' requirement versus an 'over' requirement leads to different emergent dynamics, such as rule violation, over-contribution, or stable cooperation.",
+            "ResearchQuestions": [
+                "1. Does framing the contribution rule as an 'over-requirement' (asking for more than the threshold) lead to higher rates of rule violation (non-compliance) compared to an 'exact requirement'?",
+                "2. Does the 'exact requirement' framing promote more stable and consistent cooperation over time?",
+                "3. How does rule framing affect group efficiency, measured by the prevalence of over-contribution (waste) and the probability of achieving the threshold?",
+                "4. How do LLM agents justify their contribution decisions in response to different rule framings, and do these justifications reflect deontological (rule-based) versus consequentialist reasoning?"
+            ],
+            "Hypotheses": [
+                "1. Over-requirement framing will lead to higher rates of rule violation (agents contributing less than asked) because the rule is perceived as unfair or overly demanding.",
+                "2. Exact requirement framing will result in more stable cooperation patterns, with agents aligning their contributions closely with the rule, reducing variance.",
+                "3. Over-requirement framing will increase over-contribution (waste) as some agents may still try to meet the higher ask, reducing group efficiency.",
+                "4. Agents in the exact condition will produce justifications that emphasize rule-following, while agents in the over condition will more frequently cite fairness or strategic adjustments."
+            ],
+            "RelatedWork": "Related work includes: (1) Threshold public goods game studies (Zhang et al., 2015) on insurance and provision; (2) Framing effects in behavioral economics (e.g., gain vs. loss frames) but not specifically on rule phrasing in TPGG; (3) LLM-agent simulations of social dilemmas (e.g., GovSim, CRSEC) focusing on norm compliance, but not on rule framing. Our work uniquely combines TPGG with LLM agents to test how natural language rule framing affects cooperation, bridging institutional design and multi-agent systems.",
+            "Abstract": "This study proposes a multi-agent simulation of a threshold public goods game (TPGG) using LLM-based agents to investigate the impact of rule framing on cooperation and compliance. Agents are grouped in small teams and must contribute tokens to a public pot; if the total meets or exceeds a threshold, all receive a reward. We manipulate the framing of the contribution rule: in the 'exact' condition, the rule states the precise threshold amount needed; in the 'over' condition, the rule asks for a higher amount than necessary. Agents decide their contribution via LLM reasoning, considering the rule, past interactions, and group outcomes. We measure contribution amounts, rule compliance, group success, and efficiency (over-contribution). We also analyze agents' natural language justifications for their decisions. This work sheds light on how institutional messaging can inadvertently shape collective action, with implications for designing rules in human-AI hybrid systems."
+        },
+        "SimulationRequirements": {
+            "Agents": {
+                "Count": "80 agents total, divided into 20 groups of 4 agents each (allows for between-group analysis). Group composition fixed across simulation runs.",
+                "RolesAndDescriptions": "All agents are contributors; no distinct roles. Each agent is an LLM-driven participant with the ability to reason about the rule and decide contribution amount.",
+                "StateSpec": "Each agent has: (1) `id` and `group_id`; (2) `memory` of past rounds (own contribution, group total, success/failure, others' contributions if observable); (3) `internal_rule_interpretation` (a text field updated via LLM reflection, capturing how the agent perceives the rule); (4) `compliance_tendency` (a dynamic scalar representing willingness to follow the rule, initialized randomly).",
+                "StateUpdate": "After each round, agents update memory. Every 3 rounds, agents undergo an LLM reflection to update `internal_rule_interpretation` and `compliance_tendency` based on experience. The reflection prompt asks the agent to explain its past decisions and adjust its strategy.",
+                "EnvironmentInteraction": "Agents interact by contributing to a group pot. They observe the rule framing at the start and receive feedback after each round (group total, success, individual payoff)."
+            },
+            "Environment": {
+                "Structure": "Multiple independent groups of 4 agents. No spatial structure; each group is isolated. The environment manages the public pot and threshold logic.",
+                "StateSpec": "For each group: `threshold` (fixed, e.g., 100 tokens), `pot` (sum of contributions), `success` (boolean if pot >= threshold), `over_contribution` (pot - threshold if pot > threshold).",
+                "UpdateRules": "Each round: (1) Agents make contributions. (2) Pot is summed. (3) If pot >= threshold, each agent receives reward = (pot * multiplier) / 4, minus their contribution. If pot < threshold, contributions are lost (no reward). (4) Environment resets pot for next round."
+            },
+            "Protocol": {
+                "TurnStructure": "Synchronous discrete rounds. Each round: 1. Rule reminder (displayed to agents via prompt). 2. Contribution phase (agents decide contribution simultaneously via LLM call). 3. Outcome calculation and feedback. 4. Reflection phase (every 3 rounds).",
+                "TerminationCondition": "After 20 rounds per group, or if all groups have reached a stable equilibrium (defined as no change in average contribution variance < 5% for 5 rounds).",
+                "TrialsPerPhase": "30 independent simulation runs per experimental condition (exact vs. over) to account for stochasticity.",
+                "DialogueFlow": "No direct agent-to-agent dialogue; agents only receive public information (rule, outcomes). However, during reflection, agents 'think' internally via LLM."
+            },
+            "Rules": {
+                "SharedInformation": "All agents know: the TPGG rules (threshold, reward multiplier, number of agents), the framing condition (exact or over), and that contributions are private unless specified otherwise. In each round, after contributions, all agents see the group total and whether the threshold was met.",
+                "PrivateInformation": "Each agent's contribution amount is private to others (unless we vary observability as an experimental condition). Memory and internal states are private.",
+                "PayoffStructure": "If pot >= threshold: each agent's payoff = (pot * 1.5) / 4 - contribution. If pot < threshold: payoff = -contribution. Multiplier set to 1.5 to create a social dilemma.",
+                "ExperimentConditions": [
+                    "Condition A (Exact): Rule states 'The group must contribute exactly 100 tokens in total to succeed.' (though exceeding is allowed, the rule emphasizes exactness).",
+                    "Condition B (Over): Rule states 'The group must contribute at least 120 tokens in total to succeed.' (threshold is actually 100, but rule asks for 120)."
+                ]
+            },
+            "Logging": {
+                "ContentToRecord": "Per round per agent: contribution amount, compliance (1 if contribution meets the rule's asked amount, else 0), payoff, internal_rule_interpretation text. Per group: pot total, success, over_contribution. Per simulation run: aggregate metrics over time.",
+                "LogFormat": "CSV for numerical data; JSON lines for textual justifications from reflection phases.",
+                "AnalysisMetrics": [
+                    "Average contribution per condition",
+                    "Rule compliance rate (percentage of contributions that meet the rule's asked amount)",
+                    "Group success rate (percentage of rounds threshold met)",
+                    "Efficiency waste (average over-contribution per successful round)",
+                    "Variance in contributions within groups",
+                    "Semantic analysis of justifications: frequency of rule-based vs. fairness-based language"
+                ],
+                "VerificationMethod": "Statistical comparisons (t-tests, mixed-effects models) between conditions for compliance, success, and waste. Time-series analysis of contribution trends. NLP analysis (e.g., sentiment, keyword extraction) on justifications to test hypothesis 4."
+            }
+        },
+        "RiskFactorsAndLimitations": [
+            "LLM Instability: LLM decisions may be noisy and sensitive to prompt phrasing. Mitigation: use consistent prompts, set temperature low, and run multiple trials.",
+            "Cost: Running LLM calls for 80 agents over 20 rounds could be expensive. Mitigation: use smaller open-source LLMs (e.g., Llama 3.1 8B) for contribution decisions, with caching.",
+            "Simplified Rule Framing: The binary framing may not capture all real-world nuances. Future work could include continuous variations.",
+            "Generalizability: Findings may be specific to the LLM's built-in biases about rules. We will test with at least two LLM families."
+        ]
     }
 ]

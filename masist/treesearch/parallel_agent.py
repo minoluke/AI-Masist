@@ -547,6 +547,14 @@ class ParallelAgent:
             except Exception as e:
                 logger.error(f"Error in multi-seed evaluation run {i}: {str(e)}")
 
+        # Fallback: if all seed evaluations failed, use the original best node
+        if not seed_nodes:
+            logger.warning(
+                f"All {num_seeds} seed evaluations failed (likely timeout). "
+                f"Falling back to original best node for aggregation."
+            )
+            return [node]
+
         return seed_nodes
 
     def _run_plot_aggregation(self, node: Node, seed_nodes: List[Node]) -> Optional[Node]:
@@ -614,8 +622,12 @@ class ParallelAgent:
                     for plot_file in plots_dir.glob("*.png"):
                         final_path = exp_results_dir / plot_file.name
                         plot_file.resolve().rename(final_path)
-                        agg_node.plots.append(str(final_path))
-                        agg_node.plot_paths.append(str(final_path.absolute()))
+                        # Create web-friendly relative path for HTML visualization
+                        # HTML is at: logs/0-run/stage_X_.../tree_plot.html
+                        # Images are at: logs/0-run/experiment_results/seed_aggregation_XXX/file.png
+                        web_path = f"../experiment_results/seed_aggregation_{agg_node.id}/{plot_file.name}"
+                        agg_node.plots.append(web_path)  # For visualization
+                        agg_node.plot_paths.append(str(final_path.absolute()))  # For programmatic access
 
                 agg_node.is_buggy = False
                 self.journal.append(agg_node)

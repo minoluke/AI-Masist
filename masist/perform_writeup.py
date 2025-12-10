@@ -335,7 +335,7 @@ def get_reflection_page_info(reflection_pdf, page_limit):
 
 
 def get_citation_addition(
-    client, model, context, current_round, total_rounds, task_desc
+    client, model, context, current_round, total_rounds, idea_text
 ):
     report, citations = context
     msg_history = []
@@ -428,7 +428,7 @@ This JSON will be automatically parsed, so ensure the format is precise."""
             prompt=citation_first_prompt_template.format(
                 current_round=current_round + 1,
                 total_rounds=total_rounds,
-                task_desc=task_desc,
+                task_desc=idea_text,
                 report=report,
                 citations=citations,
             ),
@@ -646,6 +646,23 @@ with "latex" syntax highlighting, like so:
 """
 
 
+def load_idea_text(base_folder):
+    """
+    Load the idea text from the base folder.
+    """
+    idea_text = ""
+    research_idea_path = osp.join(base_folder, "research_idea.md")
+    if osp.exists(research_idea_path):
+        with open(research_idea_path, "r") as f_idea:
+            idea_text = f_idea.read()
+    else:
+        idea_md_path = osp.join(base_folder, "idea.md")
+        if osp.exists(idea_md_path):
+            with open(idea_md_path, "r") as f_idea:
+                idea_text = f_idea.read()
+    return idea_text
+
+
 def load_exp_summaries(base_folder):
     """
     Load the experiment summaries from the base folder.
@@ -726,16 +743,14 @@ def filter_experiment_summaries(exp_summaries, step_name):
     return filtered_summaries
 
 
-def gather_citations(base_folder, task_desc, num_cite_rounds=20, small_model="deepseek-chat"):
+def gather_citations(base_folder, num_cite_rounds=20, small_model="deepseek-chat"):
     """
     Gather citations for a paper, with ability to resume from previous progress.
 
     Args:
         base_folder: Path to project folder
-        task_desc: Task description text
         num_cite_rounds: Maximum number of citation gathering rounds
         small_model: Model to use for citation collection
-        resume: Whether to try to resume from previous progress
 
     Returns:
         str: The gathered citations text, or None if failed
@@ -764,6 +779,9 @@ def gather_citations(base_folder, task_desc, num_cite_rounds=20, small_model="de
             citations_text = ""
 
     try:
+        # Load idea text from file (AI-Scientist-v2 compatible)
+        idea_text = load_idea_text(base_folder)
+
         # Load summaries
         exp_summaries = load_exp_summaries(base_folder)
         filtered_summaries = filter_experiment_summaries(
@@ -783,7 +801,7 @@ def gather_citations(base_folder, task_desc, num_cite_rounds=20, small_model="de
                     context_for_citation,
                     round_idx,
                     num_cite_rounds,
-                    task_desc,
+                    idea_text,
                 )
 
                 if done:
@@ -840,7 +858,6 @@ def gather_citations(base_folder, task_desc, num_cite_rounds=20, small_model="de
 
 def perform_writeup(
     base_folder,
-    task_desc,
     citations_text=None,
     no_writing=False,
     num_cite_rounds=20,
@@ -865,6 +882,9 @@ def perform_writeup(
             os.remove(osp.join(base_folder, old_pdf))
 
     try:
+        # Load idea text from file (AI-Scientist-v2 compatible)
+        idea_text = load_idea_text(base_folder)
+
         exp_summaries = load_exp_summaries(base_folder)
         filtered_summaries_for_writeup = filter_experiment_summaries(
             exp_summaries, step_name="writeup"
@@ -873,17 +893,22 @@ def perform_writeup(
         combined_summaries_str = json.dumps(filtered_summaries_for_writeup, indent=2)
 
         # Prepare a new fresh latex folder
+        # Select template based on page_limit (8+ pages = ICML, else ICBINB)
         if not osp.exists(osp.join(latex_folder, "template.tex")):
-            # Use importlib.resources to get the path to blank_icbinb_latex
+            if page_limit >= 8:
+                template_name = 'blank_icml_latex'
+            else:
+                template_name = 'blank_icbinb_latex'
+            # Use importlib.resources to get the path to template
             try:
                 # Python 3.9+
-                blank_latex_path = importlib.resources.files('masist').joinpath('blank_icbinb_latex')
+                blank_latex_path = importlib.resources.files('masist').joinpath(template_name)
                 with importlib.resources.as_file(blank_latex_path) as template_path:
                     shutil.copytree(template_path, latex_folder, dirs_exist_ok=True)
             except AttributeError:
                 # Python 3.7-3.8 fallback
                 import pkg_resources
-                blank_latex_path = pkg_resources.resource_filename('masist', 'blank_icbinb_latex')
+                blank_latex_path = pkg_resources.resource_filename('masist', template_name)
                 shutil.copytree(blank_latex_path, latex_folder, dirs_exist_ok=True)
 
         writeup_file = osp.join(latex_folder, "template.tex")
@@ -926,7 +951,7 @@ def perform_writeup(
             # If still no citations, gather them
             if not citations_text:
                 citations_text = gather_citations(
-                    base_folder, task_desc, num_cite_rounds, small_model
+                    base_folder, num_cite_rounds, small_model
                 )
                 if citations_text is None:
                     print("Warning: Citation gathering failed")
@@ -979,7 +1004,7 @@ def perform_writeup(
             writeup_text = f.read()
 
         combined_prompt = writeup_prompt.format(
-            task_desc=task_desc,
+            task_desc=idea_text,
             summaries=combined_summaries_str,
             aggregator_code=aggregator_code,
             plot_list=", ".join(plot_names),
@@ -1257,7 +1282,6 @@ USE MINIMAL EDITS TO OPTIMIZE THE PAGE LIMIT USAGE."""
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Perform writeup for a project")
     parser.add_argument("--folder", type=str, help="Project folder", required=True)
-    parser.add_argument("--task-desc", type=str, help="Task description", required=True)
     parser.add_argument("--no-writing", action="store_true", help="Only generate")
     parser.add_argument("--num-cite-rounds", type=int, default=20)
     parser.add_argument(
@@ -1284,14 +1308,13 @@ if __name__ == "__main__":
         "--page-limit",
         type=int,
         default=4,
-        help="Target page limit for the main paper (excluding references).",
+        help="Target page limit for the main paper (excluding references). Use 8 for ICML format.",
     )
     args = parser.parse_args()
 
     try:
         success = perform_writeup(
             base_folder=args.folder,
-            task_desc=args.task_desc,
             no_writing=args.no_writing,
             num_cite_rounds=args.num_cite_rounds,
             small_model=args.model,

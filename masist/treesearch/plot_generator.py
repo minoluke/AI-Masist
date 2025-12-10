@@ -64,9 +64,6 @@ class PlotGenerator:
 
         logger.info(f"Plotting execution completed for node {node.id}")
 
-        # Step 3: Track generated plots
-        self._track_generated_plots(node, working_dir)
-
     def _generate_plotting_code(
         self, node: Node, working_dir: str, plot_code_from_prev_stage: str = None
     ) -> str:
@@ -265,30 +262,6 @@ class PlotGenerator:
 
         return code
 
-    def _track_generated_plots(self, node: Node, working_dir: str):
-        """Track generated plot files and save to node"""
-        plots_dir = Path(working_dir)
-        if not plots_dir.exists():
-            logger.warning(f"Working directory {working_dir} does not exist")
-            return
-
-        # Find all PNG files in working directory
-        plot_files = list(plots_dir.glob("*.png"))
-        if not plot_files:
-            logger.warning("No plot files found in working directory")
-            return
-
-        logger.info(f"Found {len(plot_files)} plot files")
-
-        # Save plots to node
-        node.plots = []
-        node.plot_paths = []
-        for plot_file in plot_files:
-            # Store absolute path for programmatic access
-            node.plot_paths.append(str(plot_file.absolute()))
-            # Store relative path for web visualization
-            node.plots.append(str(plot_file.name))
-            logger.info(f"Tracked plot: {plot_file.name}")
 
     @property
     def _prompt_resp_fmt(self):

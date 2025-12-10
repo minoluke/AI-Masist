@@ -123,21 +123,20 @@ class StageTransition:
 class AgentManager:
     def __init__(self, task_desc: str, cfg: Any, workspace_dir: Path):
         self.task_desc = json.loads(task_desc)
-        # MASist専用キーチェック（新ネスト構造対応）
-        required_keys = [
+        # Key mapping for compatibility (MASIST format -> AI-Scientist-v2 format)
+        if "Short Hypothesis" not in self.task_desc and "Hypothesis" in self.task_desc:
+            self.task_desc["Short Hypothesis"] = self.task_desc["Hypothesis"]
+        if "Experiments" not in self.task_desc and "Experimental Conditions" in self.task_desc:
+            self.task_desc["Experiments"] = self.task_desc["Experimental Conditions"]
+        for k in [
             "Title",
-            "Name",
-            "SimulationRequest",
-            "SimulationRequirements",
-        ]
-        for k in required_keys:
+            "Abstract",
+            "Short Hypothesis",
+            "Experiments",
+            "Risk Factors and Limitations",
+        ]:
             if k not in self.task_desc.keys():
                 raise ValueError(f"Key {k} not found in task_desc")
-        # Loggingはネスト構造（SimulationRequirements.Logging）をチェック
-        if "Logging" not in self.task_desc.get("SimulationRequirements", {}):
-            raise ValueError("Key 'Logging' not found in SimulationRequirements")
-        # AI-Scientist-v2互換キーを内部生成
-        self._generate_compat_keys()
         self.cfg = cfg
         self.workspace_dir = workspace_dir
         self.current_stage_number = 0
@@ -173,18 +172,6 @@ class AgentManager:
         }
         # Create initial stage
         self._create_initial_stage()
-
-    def _generate_compat_keys(self):
-        """MASistキーからAI-Scientist-v2互換キーを生成"""
-        sr = self.task_desc["SimulationRequest"]
-        self.task_desc["Abstract"] = f"{sr.get('Background', '')}\n\n{sr.get('Purpose', '')}"
-        hypotheses = sr.get("Hypotheses", [])
-        if isinstance(hypotheses, list):
-            self.task_desc["Short Hypothesis"] = "\n".join(hypotheses)
-        else:
-            self.task_desc["Short Hypothesis"] = str(hypotheses)
-        self.task_desc["Experiments"] = self.task_desc["SimulationRequirements"].get("Rules", {}).get("ExperimentConditions", [])
-        self.task_desc["Risk Factors and Limitations"] = self.task_desc.get("Other", "")
 
     def _get_max_iterations(self, stage_number: int) -> int:
         """Get max iterations for a stage from config or default"""

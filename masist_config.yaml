@@ -25,27 +25,6 @@ exec:
 
 generate_report: True
 
-# Final plot aggregation settings
-aggregate_plots: true
-agg_plots_model: "deepseek-chat"
-agg_plots_reflections: 5
-
-# Paper writeup settings
-perform_writeup: true
-writeup_small_model: "deepseek-chat"       # 引用収集等の軽量タスク
-writeup_big_model: "deepseek-reasoner"     # 論文本文生成（推論が必要）
-writeup_reflections: 3
-writeup_page_limit: 4
-
-# Citation gathering settings
-gather_citations: true
-num_cite_rounds: 20
-
-# Review settings
-perform_review: true
-review_model: "deepseek-chat"              # テキストレビュー
-vlm_model: "gpt-4o-mini"                   # 画像レビュー（VLMはOpenAIのみ）
-
 # LLM settings for final report from journal
 report:
   model: deepseek-chat
