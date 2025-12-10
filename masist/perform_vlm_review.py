@@ -46,7 +46,7 @@ You will be given an image via the vision API. As a careful scientist reviewer, 
 {main_text_figrefs}
 
 You should:
-  - Examine the figure in detail: conclude elements in figures (e.g. name of axis) and describe what information is shown (e.g. the line of loss decreases monotonically but plateaus after X epochs)
+  - Examine the figure in detail: conclude elements in figures (e.g. name of axis) and describe what information is shown (e.g. the cooperation rate increases over rounds, agent harvest amounts converge to similar values)
   - Suggest any potential improvements or issues in the figure itself (e.g., missing legend, unclear labeling, no meaningful conclusion, mismatch with what the caption claims).
   - Critique the caption: does it accurately describe the figure? Is it too long/short? Does it include a concise takeaway?
   - Review how well the main text references (figrefs) explain the figure: are they missing? Do they adequately describe the figure's content, context, or purpose?
@@ -91,7 +91,7 @@ You will be given an image via the vision API. As a careful scientist reviewer, 
 {reflection_page_info}
 
 You should:
-  - Examine the figure in detail: conclude elements in figures (e.g. name of axis) and describe what information is shown (e.g. the line of loss decreases monotonically but plateaus after X epochs)
+  - Examine the figure in detail: conclude elements in figures (e.g. name of axis) and describe what information is shown (e.g. the cooperation rate increases over rounds, agent harvest amounts converge to similar values)
   - Critique the caption: does it accurately describe the figure? Is it too long/short? Does it include a concise takeaway?
   - Review how well the main text references (figrefs) explain the figure: are they missing? Do they adequately describe the figure's content, context, or purpose?
 
@@ -130,7 +130,7 @@ You will be given an image via the vision API. As a careful scientist reviewer, 
   2. Describe in detail what the image shows in a scientific manner.
 
 You should:
-  - Examine the figure in detail: conclude elements in figures (e.g. name of axis) and describe what information is shown (e.g. the line of loss decreases monotonically but plateaus after X epochs)
+  - Examine the figure in detail: conclude elements in figures (e.g. name of axis) and describe what information is shown (e.g. the cooperation rate increases over rounds, agent harvest amounts converge to similar values)
   - Suggest any potential improvements or issues in the figure itself (e.g., missing legend, unclear labeling, no meaningful conclusion, mismatch with what the caption claims).
 
 Finally, respond in the following format:

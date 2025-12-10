@@ -946,7 +946,7 @@ class ParallelAgent:
             "Always close figures after saving",
             "Always include a title for each plot, and be sure to use clear subtitles while also specifying the scenario being visualized.",
             "Make sure to use descriptive names for figures when saving e.g. always include the scenario name and the type of plot in the name",
-            "When there are many similar figures to plot (e.g. generated samples at each epoch), make sure to plot only at a suitable interval of epochs so that you only plot at most 5 figures.",
+            "When there are many similar figures to plot (e.g. agent states at each round), make sure to plot only at a suitable interval of rounds so that you only plot at most 5 figures.",
             "Make sure to add legend for standard error bars and means if applicable",
         ]
 

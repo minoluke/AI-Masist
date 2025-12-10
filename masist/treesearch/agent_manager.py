@@ -462,12 +462,13 @@ Your research idea:\n\n
             1. Figure Analysis:
             {vlm_feedback}
 
-            2. Datasets Tested: {best_node.datasets_successfully_tested}
+            2. Scenarios Tested: {best_node.datasets_successfully_tested}
 
             Requirements for completion:
-            1. Training curves should show stable convergence
-            2. Results should be tested on at least two datasets
-            3. No major instabilities or issues in the plots
+            1. Multiple experimental conditions tested (communication modes, framing, agent configurations, etc.)
+            2. Meaningful variation in metrics across conditions (not identical results)
+            3. No major errors or crashes in the simulation
+            4. Evidence of systematic parameter exploration
 
             Provide a detailed evaluation of completion status.
             """
@@ -519,12 +520,14 @@ Your research idea:\n\n
             ):
                 if exec_time_minutes < self.cfg.exec.timeout / 60 / 2:
                     exec_time_feedback = (
-                        f"Implementation works but runs too quickly ({exec_time_minutes:.2f} minutes)."
-                        "We have up to 60 minutes available for each experiment."
+                        f"Implementation works but runs too quickly ({exec_time_minutes:.2f} minutes). "
+                        "We have up to 60 minutes available for each experiment. "
                         "Make sure to scale up the experiment "
-                        "by increasing the number of epochs, using a larger model, or working with bigger datasets."
-                        "Given that the current execution time is {exec_time_minutes:.2f} minutes, think about how changing the number of epochs to run, or using a larger model, or working with bigger datasets to run"
-                        "will affect the execution time, and make sure to scale up the experiment accordingly."
+                        "by increasing the number of simulation rounds, adding more agents, "
+                        "testing more scenarios/conditions, or increasing the complexity of agent interactions. "
+                        f"Given that the current execution time is {exec_time_minutes:.2f} minutes, think about how "
+                        "changing max_rounds, number of agents, or number of experimental conditions "
+                        "will affect the execution time, and scale up the experiment accordingly."
                     )
                     print(f"[cyan]exec_time_feedback: {exec_time_feedback}[/cyan]")
                     self.journals[stage.name].nodes[
@@ -1178,10 +1181,10 @@ Your research idea:\n\n
         {json.dumps(previous_results.get('progress', {}), indent=2)}
 
         Expected Stage Progression:
-        1. Initial Implementation: Focus on basic working implementation
-        2. Baseline Tuning: Systematic optimization of core parameters
-        3. Creative Research: Novel improvements and approaches
-        4. Ablation Studies: Systematic component analysis
+        1. Initial Implementation: Focus on basic working multi-agent simulation
+        2. Baseline Tuning: Systematic variation of simulation parameters (conditions, agents, environments)
+        3. Creative Research: Novel experimental designs and hypothesis testing
+        4. Ablation Studies: Systematic analysis of which factors contribute to observed effects
 
         Consider factors like:
         - Progress toward stage goals
