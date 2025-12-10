@@ -64,7 +64,7 @@
         "Related Work": "Related work includes: (1) **Cultural diffusion models** (Axelrod, 1997) simulate how cultural traits spread but assume fixed traits and no negotiation. (2) **LLM-agent norm formation** (e.g., Gupta et al., 2025; Ren et al., 2024) focuses on norm compliance and learning in homogeneous groups. (3) **Cultural alignment in LLMs** (e.g., Yuan et al., 2024 - Cultural Palette) aims to align LLMs with specific cultural values, but not on inter-cultural negotiation. (4) **Value-aware agents** (e.g., Mohamadi & Yavari, 2025 - DECIDE-SIM) study ethical choices but not cultural value negotiation. Our work uniquely combines **cultural value diversity**, **resource dilemma**, and **LLM-mediated dialogue** to study hybrid norm emergence, going beyond alignment or diffusion.",
         "Abstract": "This study proposes a multi-agent simulation where LLM agents with different cultural value orientations (individualistic vs. collectivist) interact in a common-pool resource dilemma. Agents must harvest resources from a shared pool to earn points, but over-harvesting leads to resource collapse. Crucially, agents can engage in natural language dialogue before making harvesting decisions, allowing them to negotiate acceptable behaviors based on their values. We vary communication conditions (no communication, open dialogue) and social learning mechanisms (imitation of successful agents). We track harvesting actions, dialogue content, and the evolution of personal norms. We hypothesize that dialogue enables value negotiation, leading to emergent hybrid norms that sustainably manage resources. This work contributes to understanding how diverse societies can co-create cooperative institutions through communication, with implications for AI-mediated intercultural collaboration.",
         "Agents": {
-            "Count": "30-60 agents (configurable, e.g., 30: 15 individualists, 15 collectivists)",
+            "Count": "6 agents (3 individualists, 3 collectivists)",
             "Roles": "Two cultural value orientations: Individualist (prioritizes personal gain) and Collectivist (prioritizes group welfare). All agents are resource harvesters; no other roles.",
             "State Specification": "Each agent has: (1) `cultural_value` (individualist or collectivist), (2) `personal_norm` (a target harvesting amount, initially set based on culture), (3) `memory` of past interactions (own harvest, others' harvests, dialogue history, resource state, personal payoff), (4) `trust_level` (dynamic, affects willingness to follow negotiated norms), (5) `dialogue_history` (recent conversations for context).",
             "State Update": "After each round, agents update memory. Periodically (every 5 rounds), agents reflect via LLM call to update `personal_norm` and `trust_level` based on experience and dialogue. Social learning: agents may imitate the `personal_norm` of a high-payoff neighbor with probability.",
@@ -77,8 +77,8 @@
         },
         "Protocol": {
             "Turn Structure": "Synchronous discrete rounds. Each round: 1. Dialogue phase (agents exchange messages with neighbors via LLM calls). 2. Harvest decision phase (each agent chooses harvest amount based on personal_norm, dialogue, and trust). 3. Resource update and payoff calculation. 4. Learning phase (social imitation and reflection, asynchronous).",
-            "Termination Condition": "After a fixed number of rounds (e.g., 100) OR if resource collapses for 5 consecutive rounds.",
-            "Number of Trials": "At least 20 independent runs per experimental condition for statistical significance.",
+            "Termination Condition": "After a fixed number of rounds (e.g., 10) OR if resource collapses for 3 consecutive rounds.",
+            "Number of Trials": "1 run per experimental condition (test mode).",
             "Interaction Flow": "For each round: (1) Dialogue: each agent generates a message to each neighbor (LLM call with context: cultural value, recent history, resource state). Messages are shared. (2) Harvest: each agent decides harvest amount (integer 0 to max_allowed) via a decision function that considers personal_norm, messages received, and trust. (3) Environment updates resource and calculates payoffs (payoff = harvest_amount * constant - penalty if over-harvesting). (4) Agents update memory and possibly adjust personal_norm."
         },
         "Rules": {
@@ -89,14 +89,11 @@
         },
         "Experimental Conditions": {
             "Independent Variables": [
-                "Communication condition (no communication, open dialogue)",
-                "Social learning (on/off)",
-                "Cultural composition (ratio of individualists to collectivists: 50-50, 70-30)",
-                "Resource scarcity (high vs. low growth rate)"
+                "Communication condition (open dialogue only for test)"
             ]
         },
         "Baseline": "Condition with no communication and no social learning, where agents act solely based on initial cultural values.",
-        "Parameter Sweep": "Growth rate: [0.1, 0.3, 0.5]; carrying capacity: [100, 200]; overharvest_penalty: [0, 5, 10]; noise in harvest decision: [0, 1, 2].",
+        "Parameter Sweep": "Growth rate: [0.3]; carrying capacity: [100]; overharvest_penalty: [5]; noise in harvest decision: [1].",
         "Logging Content": "Per round: resource level, total harvest, average harvest per cultural group. Per agent: harvest amount, personal_norm, payoff, cultural value. Per dialogue: sender, receiver, message content. Per learning event: imitation actions.",
         "Log Format": "CSV for quantitative data (resource, harvests, payoffs). JSON lines for dialogue messages with metadata.",
         "Analysis Metrics": [
