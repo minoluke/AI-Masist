@@ -138,7 +138,7 @@ def perform_experiments_bfts(config_path: str):
             else:
                 current_findings = journal.generate_summary(include_code=False)
 
-            best_metric = journal.get_best_node(cfg=cfg)
+            best_node = journal.get_best_node(cfg=cfg)
 
             # Generate and save stage progress summary
             stage_summary = {
@@ -146,11 +146,8 @@ def perform_experiments_bfts(config_path: str):
                 "total_nodes": len(journal.nodes),
                 "buggy_nodes": len(journal.buggy_nodes),
                 "good_nodes": len(journal.good_nodes),
-                "best_metric": (
-                    str(best_metric.metric)
-                    if best_metric
-                    else "None"
-                ),
+                "selected_node": best_node.id[:8] if best_node else "None",
+                "metrics": str(best_node.metric) if best_node else "None",
                 "current_findings": current_findings,
             }
 
@@ -263,6 +260,18 @@ def perform_experiments_bfts(config_path: str):
         print(f"- Baseline summary: {baseline_summary_path}")
         print(f"- Research summary: {research_summary_path}")
         print(f"- Ablation summary: {ablation_summary_path}")
+
+        # Final plot aggregation
+        if cfg.get("aggregate_plots", False):
+            print("Generating aggregated plots...")
+            from masist.perform_plotting import aggregate_plots
+            aggregate_plots(
+                base_folder=str(cfg.log_dir),
+                task_desc=task_desc_str,
+                model=cfg.get("agg_plots_model", "deepseek-chat"),
+                n_reflections=cfg.get("agg_plots_reflections", 5),
+            )
+            print(f"Aggregated plots saved to: {cfg.log_dir / 'figures'}")
 
 
 if __name__ == "__main__":

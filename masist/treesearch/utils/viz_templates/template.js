@@ -393,57 +393,78 @@ function selectStage(stageId) {
 async function loadAllStageData(baseTreeData) {
   console.log("Loading stage data with base data:", baseTreeData);
 
-  // The base tree data is for the current stage
-  const currentStageId = baseTreeData.current_stage || 'Stage_1';
-
-  // Ensure base tree data is valid and has required properties
-  if (baseTreeData && baseTreeData.layout && baseTreeData.edges) {
-    stageData[currentStageId] = baseTreeData;
-    availableStages.push(currentStageId);
-    console.log(`Added current stage ${currentStageId} to available stages`);
+  // Check if data is in the new "all_stages" format (embedded) or old format (fetch-based)
+  if (baseTreeData.all_stages) {
+    // New format: all stages are embedded in the data
+    console.log("Using embedded all_stages format");
+    for (const [stageId, data] of Object.entries(baseTreeData.all_stages)) {
+      if (data && data.layout && data.edges) {
+        stageData[stageId] = data;
+        availableStages.push(stageId);
+        console.log(`Loaded embedded data for ${stageId}`);
+      } else {
+        console.warn(`Embedded data for ${stageId} is invalid:`, data);
+      }
+    }
+    // Sort availableStages to ensure consistent order
+    availableStages.sort();
   } else {
-    console.warn(`Current stage ${currentStageId} data is invalid:`, baseTreeData);
-  }
+    // Old format: single stage data embedded, fetch others
+    const currentStageId = baseTreeData.current_stage || 'Stage_1';
 
-  // Use relative path to load other stage trees
-  const logDirPath = baseTreeData.log_dir_path || '.';
-  console.log("Log directory path:", logDirPath);
-
-  // Load data for each stage if available
-  const stageNames = ['Stage_1', 'Stage_2', 'Stage_3', 'Stage_4'];
-  const stageNames2actualNames = {
-    'Stage_1': 'stage_1_initial_implementation_1_preliminary',
-    'Stage_2': 'stage_2_baseline_tuning_1_first_attempt',
-    'Stage_3': 'stage_3_creative_research_1_first_attempt',
-    'Stage_4': 'stage_4_ablation_studies_1_first_attempt'
+    // Ensure base tree data is valid and has required properties
+    if (baseTreeData && baseTreeData.layout && baseTreeData.edges) {
+      stageData[currentStageId] = baseTreeData;
+      availableStages.push(currentStageId);
+      console.log(`Added current stage ${currentStageId} to available stages`);
+    } else {
+      console.warn(`Current stage ${currentStageId} data is invalid:`, baseTreeData);
     }
 
-  for (const stage of stageNames) {
+    // Use relative path to load other stage trees
+    const logDirPath = baseTreeData.log_dir_path || '.';
+    console.log("Log directory path:", logDirPath);
 
-    if (baseTreeData.completed_stages && baseTreeData.completed_stages.includes(stage)) {
-      try {
-        console.log(`Attempting to load data for ${stage} from ${logDirPath}/${stageNames2actualNames[stage]}/tree_data.json`);
-        const response = await fetch(`${logDirPath}/${stageNames2actualNames[stage]}/tree_data.json`);
+    // Load data for each stage if available
+    const stageNames = ['Stage_1', 'Stage_2', 'Stage_3', 'Stage_4'];
+    const stageNames2actualNames = {
+      'Stage_1': 'stage_1_initial_implementation_1_preliminary',
+      'Stage_2': 'stage_2_baseline_tuning_1_first_attempt',
+      'Stage_3': 'stage_3_creative_research_1_first_attempt',
+      'Stage_4': 'stage_4_ablation_studies_1_first_attempt'
+    }
 
-        if (response.ok) {
-          const data = await response.json();
-
-          // Validate the loaded data
-          if (data && data.layout && data.edges) {
-            stageData[stage] = data;
-            availableStages.push(stage);
-            console.log(`Successfully loaded and validated data for ${stage}`);
-          } else {
-            console.warn(`Loaded data for ${stage} is invalid:`, data);
-          }
-        } else {
-          console.warn(`Failed to load data for ${stage} - HTTP status ${response.status}`);
-        }
-      } catch (error) {
-        console.error(`Error loading data for ${stage}:`, error);
+    for (const stage of stageNames) {
+      // Skip if already loaded (current stage)
+      if (availableStages.includes(stage)) {
+        continue;
       }
-    } else {
-      console.log(`Skipping stage ${stage} - not in completed stages list:`, baseTreeData.completed_stages);
+
+      if (baseTreeData.completed_stages && baseTreeData.completed_stages.includes(stage)) {
+        try {
+          console.log(`Attempting to load data for ${stage} from ${logDirPath}/${stageNames2actualNames[stage]}/tree_data.json`);
+          const response = await fetch(`${logDirPath}/${stageNames2actualNames[stage]}/tree_data.json`);
+
+          if (response.ok) {
+            const data = await response.json();
+
+            // Validate the loaded data
+            if (data && data.layout && data.edges) {
+              stageData[stage] = data;
+              availableStages.push(stage);
+              console.log(`Successfully loaded and validated data for ${stage}`);
+            } else {
+              console.warn(`Loaded data for ${stage} is invalid:`, data);
+            }
+          } else {
+            console.warn(`Failed to load data for ${stage} - HTTP status ${response.status}`);
+          }
+        } catch (error) {
+          console.error(`Error loading data for ${stage}:`, error);
+        }
+      } else {
+        console.log(`Skipping stage ${stage} - not in completed stages list:`, baseTreeData.completed_stages);
+      }
     }
   }
 
@@ -472,6 +493,28 @@ function updateTabVisibility() {
       tab.classList.add('disabled');
     }
   });
+}
+
+// Utility function to fix plot paths for HTML files in logs/0-run/
+// tree_data.json stores paths relative to stage_X/ directory (e.g., "../experiment_results/...")
+// but unified_tree_viz.html and test_viz.html are in logs/0-run/
+// so we need to convert "../experiment_results/..." to "experiment_results/..."
+function fixPlotPath(plotPath) {
+  if (!plotPath) return plotPath;
+
+  // Handle "../experiment_results/..." -> "experiment_results/..."
+  if (plotPath.startsWith('../experiment_results/')) {
+    return plotPath.replace('../', '');
+  }
+  // Handle "../../logs/{workspace}/experiment_results/..." (AI-Scientist-v2 format)
+  // This path goes up 2 levels from stage_X then back into logs/{workspace}
+  // From 0-run/, we just need "experiment_results/..."
+  const match = plotPath.match(/\.\.\/\.\.\/logs\/[^/]+\/experiment_results\/(.+)/);
+  if (match) {
+    return 'experiment_results/' + match[1];
+  }
+
+  return plotPath;
 }
 
 // Utility function to set the node info in the right panel
@@ -522,7 +565,6 @@ const setNodeInfo = (code, plan, plot_code, plot_plan, metrics = null, exc_type 
               metricsContent += `<div class="metric-group">`;
               metricsContent += `<h4>${metric.metric_name}</h4>`;
               metricsContent += `<p><strong>Description:</strong> ${metric.description || 'N/A'}</p>`;
-              metricsContent += `<p><strong>Optimization:</strong> ${metric.lower_is_better ? 'Minimize' : 'Maximize'}</p>`;
 
               // Create table for dataset values
               metricsContent += `<table class="metric-table">
@@ -554,9 +596,10 @@ const setNodeInfo = (code, plan, plot_code, plot_plan, metrics = null, exc_type 
       if (plots && plots.length > 0) {
           let plotsContent = '';
           plots.forEach(plotPath => {
+              const fixedPath = fixPlotPath(plotPath);
               plotsContent += `
                   <div class="plot-item">
-                      <img src="${plotPath}" alt="Experiment Plot" onerror="console.error('Failed to load plot:', this.src)"/>
+                      <img src="${fixedPath}" alt="Experiment Plot" onerror="console.error('Failed to load plot:', this.src)"/>
                   </div>`;
           });
           plotsElm.innerHTML = plotsContent;
@@ -609,9 +652,10 @@ const setNodeInfo = (code, plan, plot_code, plot_plan, metrics = null, exc_type 
           vlm_feedbackContent += `<h3>Plot Analysis:</h3>`;
           plot_analyses.forEach(analysis => {
               if (analysis && analysis.plot_path) {  // Add null check
+                  const fixedPlotPath = fixPlotPath(analysis.plot_path);
                   vlm_feedbackContent += `
                       <div class="plot-analysis">
-                          <h4>Analysis for ${analysis.plot_path.split('/').pop()}</h4>
+                          <h4>Analysis for ${fixedPlotPath.split('/').pop()}</h4>
                           <p>${analysis.analysis || 'No analysis available'}</p>
                           <ul class="key-findings">
                               ${(analysis.key_findings || []).map(finding => `<li>${finding}</li>`).join('')}

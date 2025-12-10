@@ -1,0 +1,179 @@
+[
+    {
+        "Name": "signaling_norms_emergence_llm",
+        "Title": "The Spontaneous Emergence of Signaling Norms in LLM-Agent Societies: How Costly Signals Facilitate Parochial Cooperation",
+        "Background": "Social norms often involve seemingly arbitrary or costly behaviors (e.g., specific greetings, dress codes) that signal group membership and facilitate trust and cooperation within groups (parochial cooperation). Theoretical and agent-based models in sociology and biology have shown that such signaling norms can emerge spontaneously, particularly in minority groups or under intergroup conflict. Recent advances in LLM-based multi-agent systems offer a novel testbed to explore the emergence of these norms in a more realistic, language-rich setting where agents can interpret, assign meaning to, and innovate signals through natural language interaction. While existing LLM-agent research focuses on norm compliance, learning, and enforcement (e.g., GovSim, CRSEC, Normative Modules), the endogenous emergence of signals *as* norms\u2014where arbitrary behaviors acquire signaling value through social learning and evolutionary pressure\u2014remains underexplored.",
+        "Objective": "To investigate whether and how LLM agents, interacting in a mixed-motive social dilemma with group distinctions, can spontaneously develop costly signaling norms that facilitate within-group trust and cooperation (parochial cooperation). We aim to observe the process of signal meaning creation, adoption, and stabilization, and to test key predictions from signaling theory (e.g., costliness ensures signal honesty).",
+        "Research Question": "1. Under what conditions (e.g., group size asymmetry, intergroup competition, signal cost) do LLM agents develop distinct, costly signaling norms to identify in-group members? 2. Do such emergent signaling norms effectively increase trust and cooperation within groups compared to between groups? 3. How does the semantic content and perceived 'meaning' of the signal evolve through agent communication and reasoning?",
+        "Hypothesis": "1. Costly (but initially meaningless) signals are more likely to emerge and stabilize as markers of group identity in smaller or disadvantaged groups where the benefits of within-group cooperation are highest. 2. Once established, agents using the same costly signal will show higher levels of trust and cooperation in dyadic interactions (trust games) compared to agents with different or no signals. 3. Signals with moderate cost will be most effective\u2014high enough to deter free-riders but low enough to be adopted. 4. Agents will develop shared natural language justifications/rationales for the signal, giving it 'meaning' post-hoc.",
+        "Related Work": "Related work falls into three categories: (1) **Classical signaling & norm models** (e.g., Macanovic et al., 2024 - 'Signals of belonging') use traditional ABM to show costly signals emerge in minority groups. Our work replicates and extends this with LLM agents capable of rich interpretation. (2) **LLM-agent norm emergence** (e.g., Ren et al., 2024 - CRSEC; Sarkar et al., 2024 - Normative Modules) focuses on architecting norm representation, spreading, and compliance. We differ by studying norms that originate as arbitrary signals rather than prescribed rules. (3) **LLM-agent cooperation studies** (e.g., Piatti et al., 2024 - GovSim; Gupta et al., 2025) examine cooperation in resource dilemmas with explicit reward structures. We focus on the trust game with endogenous signal formation. Our key distinction is the **semiotic process**: how LLMs, through interaction, transform arbitrary actions into meaningful social signals.",
+        "Abstract": "This study proposes a multi-agent simulation to investigate the spontaneous emergence of signaling norms in societies of LLM-based agents. We design a mixed-group environment where agents from two populations (Group A and B) repeatedly engage in dyadic trust games. Crucially, agents can adopt and display a 'signal'\u2014an initially meaningless tag or phrase that carries a small cognitive or social cost to use. Agents decide whether to adopt a signal, which signal to adopt, and whether to trust/interact with others based partially on observed signals. Through social learning (observing successful interactions) and reinforcement, we predict that distinct, costly signaling norms will emerge within each group, particularly the minority group, as a means to identify cooperative in-group members. We will track the adoption dynamics, the evolution of trust and cooperation rates within vs. between groups, and the natural language justifications agents generate for their signal use. This work bridges signaling theory from evolutionary social science with the rich semantic capabilities of LLM agents, offering new insights into the origins of social symbols and parochialism.",
+        "Agents": {
+            "Count": "40-100 agents (configurable, e.g., 60 agents: 40 in Group A, 20 in Group B to create size asymmetry)",
+            "Roles": "Two group affiliations (Group A, Group B). All agents are functionally identical\u2014they can be Trustors or Trustees in the trust game. No pre-defined personalities; initial attitudes are neutral.",
+            "State Specification": "Each agent has: (1) `group_id` (A or B), (2) `signal` (one of S1, S2, S3, or NULL), (3) `memory` of past interactions (list of tuples: partner_id, partner_signal, role, amount_sent, amount_returned, outcome_utility), (4) `trust_threshold` (a dynamic parameter influencing willingness to trust based on partner's signal alignment), (5) `internal_justification` (a text field storing the agent's reason for its current signal choice, updated via LLM reflection).",
+            "State Update": "After each interaction, agents update their memory. Periodically (e.g., every 5 rounds), agents undergo a 'reflection' phase using an LLM call to update their `trust_threshold` and `internal_justification` based on their interaction history. Signal updates occur via an imitation process: agents may copy the signal of a successful agent (high cumulative payoff) from their own group with some probability.",
+            "Environment Interaction": "Agents interact in pairwise trust games within a structured interaction protocol. They observe the potential partner's `group_id` and `signal` before deciding to interact."
+        },
+        "Environment": {
+            "Structure": "Agents are placed in two distinct groups (A and B). Interaction network: each round, agents are randomly paired within a large 'mixing pool' that allows both within-group and between-group pairing. No spatial grid; focus is on group identity and signals.",
+            "State Specification": "Environment state includes: (1) current round, (2) prevalence of each signal within each group, (3) average cooperation rates per signal pair. This global information is not visible to agents.",
+            "Update Rules": "The environment manages the pairing, conducts the trust game, and calculates payoffs. It does not change endogenously except for tracking aggregate statistics."
+        },
+        "Protocol": {
+            "Turn Structure": "Synchronous discrete rounds. Each round: 1. Pairing phase. 2. Interaction phase (all pairs play trust game simultaneously). 3. Learning/update phase (asynchronously, agents update internal state based on outcome). 4. (Every N rounds) Signal imitation phase.",
+            "Termination Condition": "After a fixed number of rounds (e.g., 200) OR when signal adoption within each group reaches a stable equilibrium (e.g., >80% of a group shares one signal for 20 consecutive rounds).",
+            "Number of Trials": "At least 30 independent simulation runs per experimental condition to ensure statistical robustness.",
+            "Interaction Flow": "For each paired agent (i, j): 1. Both agents observe each other's group_id and signal. 2. Agent i (randomly assigned as Trustor) decides whether to 'pass' (not interact, both get 0) or to send an endowment of X points. Decision uses a stochastic rule based on `trust_threshold` and signal match. 3. If i sends X points, the amount is multiplied (e.g., by 3) and given to j (Trustee). 4. Trustee j decides what fraction (0 to 1) of the multiplied amount to return to i. 5. Payoffs are calculated. 6. Both agents record the interaction in memory."
+        },
+        "Rules": {
+            "Public Information": "The rules of the trust game (endowment amount, multiplication factor), the set of possible signals (e.g., three colors: 'Blue', 'Red', 'Green'), and the fact that signals may have a cost are known to all.",
+            "Private Information": "Each agent's internal `trust_threshold`, `memory`, and `internal_justification` are private. An agent's group affiliation is observable.",
+            "Decision Rules": "Trustor's send decision: Probability(send) = sigmoid(\u03b2 * (\u03b8 + \u03b1 * I(signal_match) - \u03b3 * I(different_group))). Where \u03b8 is trust_threshold, \u03b1 is signal bonus weight, \u03b3 is group penalty weight, \u03b2 is temperature. I() is indicator. Trustee's return fraction: Determined by an LLM call given context (self's role, partner's group & signal, amount received, recent history). LLM is prompted to output a number between 0 and 1.",
+            "Payoff Structure": "If no interaction: both get 0. If interaction: Trustor payoff = (Endowment - Sent) + Returned. Trustee payoff = (Multiplier * Sent) - Returned - Signal_Cost. Signal_Cost is a small fixed point deduction applied in every round the agent uses a non-NULL signal (cost ensures signal is 'costly')."
+        },
+        "Experimental Conditions": {
+            "Independent Variables": [
+                "Group size ratio (Majority-Minority: e.g., 50-10, 30-30)",
+                "Signal cost (None, Low, Medium, High)",
+                "Availability of signals (2 vs. 3 possible signals)",
+                "Learning rule (pure imitation vs. payoff-biased imitation vs. LLM-reflective choice)"
+            ]
+        },
+        "Baseline": "Condition with Zero signal cost and no group distinction (or a single group). This baseline tests if signals emerge without cost/group pressure.",
+        "Parameter Sweep": "Signal cost: [0, 0.5, 1, 2] points per round. Group size ratio: Majority:Minority from [1:1] to [4:1]. Payoff multiplier in trust game: [2, 3, 4].",
+        "Logging Content": "Per round, per agent: agent_id, group, current_signal, trust_threshold, payoff. Per interaction: pair_ids, signals, groups, sent_amount, returned_amount, interaction_type (within/between group). Per imitation event: copying agent, source agent, signal copied. Periodic snapshots of agents' `internal_justification` texts.",
+        "Log Format": "CSV files for quantitative data (agents, interactions). JSON lines for qualitative `internal_justification` texts with timestamps.",
+        "Analysis Metrics": [
+            "Signal Adoption Dynamics: Proportion of each signal per group over time.",
+            "Within-Group vs. Between-Group Cooperation Rates: Comparison of send rates and return fractions.",
+            "Efficiency: Average total payoff per capita in majority vs. minority groups.",
+            "Signal Honesty Correlation: Correlation between signal use and cooperative behavior (return fraction) across agents.",
+            "Semantic Analysis of Justifications: Using NLP (topic modeling, sentiment) to track how agents rationalize their signal use."
+        ],
+        "Verification Method": "Statistical tests (t-tests, ANOVA) to compare cooperation rates between conditions. Time-series analysis (regression) for adoption dynamics. Qualitative coding of justification texts to identify themes (e.g., 'signal shows trustworthiness', 'signal is our tradition').",
+        "Risk Factors and Limitations": "(1) **LLM Instability & Cost**: LLM calls for trustee decisions and reflections are expensive and may introduce non-determinism. Mitigation: Use smaller open-source LLMs for core decisions, cache responses, and set strict random seeds. (2) **Interpretability**: The 'black box' nature of LLM decision-making may complicate causal inference. We will use structured decision rules for trustors to maintain control. (3) **Scalability**: Running 100 agents for 200 rounds with LLM calls is computationally intensive. We will use batched calls and limit the frequency of reflection phases. (4) **Generalizability**: Findings may be specific to the chosen LLM's propensity for social reasoning. We will test with at least two different LLM backbones (e.g., GPT-4o and Llama 3)."
+    },
+    {
+        "Name": "value_negotiation_hybrid_norms",
+        "Title": "Negotiating Values, Emergent Hybrid Norms: LLM Agents in Culturally Diverse Resource Dilemmas",
+        "Background": "In an increasingly globalized world, interactions between individuals with different cultural values (e.g., individualism vs. collectivism) are common, leading to potential conflicts in cooperative settings like shared resource management. Traditional agent-based models of cultural diffusion (e.g., Axelrod's model) and recent LLM-agent studies on norm formation focus on alignment, compliance, or the spread of existing norms. However, how agents with deeply held, divergent cultural values negotiate and spontaneously create new, hybrid norms through dialogue and social learning remains underexplored. LLM agents, with their rich natural language capabilities, offer a unique testbed to simulate such value-laden negotiations and observe the emergent normative order.",
+        "Objective": "To investigate how LLM agents with different cultural value orientations negotiate and develop hybrid cooperation norms in a common-pool resource dilemma. We aim to observe the process of value conflict, dialogue-based negotiation, and the emergence of stable, shared norms that blend elements from different cultures.",
+        "Research Question": "1. How do LLM agents with contrasting cultural values (individualistic vs. collectivist) initially behave in a common-pool resource game, and how does this lead to conflict? 2. Through dialogue and social learning, do agents converge on a hybrid norm for resource use, and what characteristics does this norm have? 3. How does the presence of communication channels (open dialogue vs. no communication) affect the speed and stability of norm emergence and resource sustainability?",
+        "Hypothesis": "1. Without communication, agents will act according to their cultural values (individualists over-harvest, collectivists restrain), leading to resource depletion and low collective welfare. 2. With open dialogue, agents will engage in value negotiation, leading to the emergence of a hybrid norm that balances individual and collective interests (e.g., moderate harvesting rules). 3. The hybrid norm will be more sustainable and efficient than pure-value-based behaviors, and agents will develop shared justifications that reference both cultural perspectives. 4. Social learning (imitating successful agents) will accelerate norm convergence, especially when combined with dialogue.",
+        "Related Work": "Related work includes: (1) **Cultural diffusion models** (Axelrod, 1997) simulate how cultural traits spread but assume fixed traits and no negotiation. (2) **LLM-agent norm formation** (e.g., Gupta et al., 2025; Ren et al., 2024) focuses on norm compliance and learning in homogeneous groups. (3) **Cultural alignment in LLMs** (e.g., Yuan et al., 2024 - Cultural Palette) aims to align LLMs with specific cultural values, but not on inter-cultural negotiation. (4) **Value-aware agents** (e.g., Mohamadi & Yavari, 2025 - DECIDE-SIM) study ethical choices but not cultural value negotiation. Our work uniquely combines **cultural value diversity**, **resource dilemma**, and **LLM-mediated dialogue** to study hybrid norm emergence, going beyond alignment or diffusion.",
+        "Abstract": "This study proposes a multi-agent simulation where LLM agents with different cultural value orientations (individualistic vs. collectivist) interact in a common-pool resource dilemma. Agents must harvest resources from a shared pool to earn points, but over-harvesting leads to resource collapse. Crucially, agents can engage in natural language dialogue before making harvesting decisions, allowing them to negotiate acceptable behaviors based on their values. We vary communication conditions (no communication, open dialogue) and social learning mechanisms (imitation of successful agents). We track harvesting actions, dialogue content, and the evolution of personal norms. We hypothesize that dialogue enables value negotiation, leading to emergent hybrid norms that sustainably manage resources. This work contributes to understanding how diverse societies can co-create cooperative institutions through communication, with implications for AI-mediated intercultural collaboration.",
+        "Agents": {
+            "Count": "6 agents (3 individualists, 3 collectivists)",
+            "Roles": "Two cultural value orientations: Individualist (prioritizes personal gain) and Collectivist (prioritizes group welfare). All agents are resource harvesters; no other roles.",
+            "State Specification": "Each agent has: (1) `cultural_value` (individualist or collectivist), (2) `personal_norm` (a target harvesting amount, initially set based on culture), (3) `memory` of past interactions (own harvest, others' harvests, dialogue history, resource state, personal payoff), (4) `trust_level` (dynamic, affects willingness to follow negotiated norms), (5) `dialogue_history` (recent conversations for context).",
+            "State Update": "After each round, agents update memory. Periodically (every 5 rounds), agents reflect via LLM call to update `personal_norm` and `trust_level` based on experience and dialogue. Social learning: agents may imitate the `personal_norm` of a high-payoff neighbor with probability.",
+            "Environment Interaction": "Agents interact with the shared resource pool by choosing a harvest amount. They can send and receive dialogue messages to a subset of agents (e.g., within a communication network) before harvesting."
+        },
+        "Environment": {
+            "Structure": "Shared resource pool with renewable dynamics (e.g., logistic growth). Agents are placed on a small-world network that defines both resource access neighborhoods and communication links.",
+            "State Specification": "Resource pool: `current_resource_level`, `carrying_capacity`, `growth_rate`. Network structure: adjacency matrix for communication.",
+            "Update Rules": "Resource update: after all agents harvest, resource grows: `resource_{t+1} = resource_t + growth_rate * resource_t * (1 - resource_t / carrying_capacity) - total_harvest`. If resource falls below a threshold, it collapses (zero growth)."
+        },
+        "Protocol": {
+            "Turn Structure": "Synchronous discrete rounds. Each round: 1. Dialogue phase (agents exchange messages with neighbors via LLM calls). 2. Harvest decision phase (each agent chooses harvest amount based on personal_norm, dialogue, and trust). 3. Resource update and payoff calculation. 4. Learning phase (social imitation and reflection, asynchronous).",
+            "Termination Condition": "After a fixed number of rounds (e.g., 10) OR if resource collapses for 3 consecutive rounds.",
+            "Number of Trials": "1 run per experimental condition (test mode).",
+            "Interaction Flow": "For each round: (1) Dialogue: each agent generates a message to each neighbor (LLM call with context: cultural value, recent history, resource state). Messages are shared. (2) Harvest: each agent decides harvest amount (integer 0 to max_allowed) via a decision function that considers personal_norm, messages received, and trust. (3) Environment updates resource and calculates payoffs (payoff = harvest_amount * constant - penalty if over-harvesting). (4) Agents update memory and possibly adjust personal_norm."
+        },
+        "Rules": {
+            "Public Information": "Basic rules of the resource pool (growth rate, carrying capacity), the fact that over-harvesting can lead to collapse, and the communication protocol are known.",
+            "Private Information": "Each agent's `cultural_value`, `personal_norm`, `trust_level`, and `memory` are private. Dialogue messages are private to the sender and recipient.",
+            "Decision Rules": "Harvest decision: `harvest_amount = clip(personal_norm + influence_from_dialogue + noise, 0, max_harvest)`. Influence_from_dialogue is determined by an LLM call that interprets received messages and outputs an adjustment. Dialogue generation: LLM call with prompt to express values, suggest norms, or respond to others.",
+            "Payoff Structure": "Payoff = `harvest_amount * point_per_unit` - `overharvest_penalty` if `total_harvest > sustainable_threshold`. Sustainable_threshold is a fraction of current resource level."
+        },
+        "Experimental Conditions": {
+            "Independent Variables": [
+                "Communication condition (open dialogue only for test)"
+            ]
+        },
+        "Baseline": "Condition with no communication and no social learning, where agents act solely based on initial cultural values.",
+        "Parameter Sweep": "Growth rate: [0.3]; carrying capacity: [100]; overharvest_penalty: [5]; noise in harvest decision: [1].",
+        "Logging Content": "Per round: resource level, total harvest, average harvest per cultural group. Per agent: harvest amount, personal_norm, payoff, cultural value. Per dialogue: sender, receiver, message content. Per learning event: imitation actions.",
+        "Log Format": "CSV for quantitative data (resource, harvests, payoffs). JSON lines for dialogue messages with metadata.",
+        "Analysis Metrics": [
+            "Resource sustainability (time to collapse or final resource level)",
+            "Norm convergence (variance of personal_norms over time, within and between groups)",
+            "Efficiency (total payoff per capita)",
+            "Dialogue analysis: frequency of value-related terms (e.g., 'self', 'group'), sentiment, negotiation patterns",
+            "Equity (Gini coefficient of payoffs across agents)"
+        ],
+        "Verification Method": "Statistical tests (ANOVA) to compare sustainability and efficiency across conditions. Time-series analysis for norm convergence. NLP techniques (keyword extraction, topic modeling) on dialogue corpus to identify value negotiation themes. Correlation between dialogue content and subsequent harvest decisions.",
+        "Risk Factors and Limitations": "(1) **LLM cost and variability**: Frequent LLM calls for dialogue and decisions can be expensive and non-deterministic. Mitigation: Use smaller LLMs for dialogue generation, cache responses, and set random seeds. (2) **Simplified cultural model**: Reducing culture to binary values may overlook nuances. We will incorporate Hofstede's dimensions as continuous variables in extended studies. (3) **Scalability**: Large agent counts with dialogue may be computationally heavy. We limit agents to 60 and use batched LLM calls. (4) **Generalizability**: Findings may depend on the LLM's built-in cultural biases. We will test with multiple LLM backbones (e.g., GPT-4, Llama 3) to assess robustness."
+    },
+    {
+        "Name": "rule_framing_tpgg_llm",
+        "Title": "The Framing of Rules in Threshold Public Goods Games: How LLM Agents Respond to 'Exact' vs. 'Over' Requirements",
+        "SimulationRequest": {
+            "Background": "Threshold public goods games (TPGG) are a classic model of collective action where a group must collectively contribute a minimum amount to provide a public good. Prior research has examined factors like insurance (Zhang et al., 2015), network interdependence (Yang et al., 2018), and heterogeneity. However, how the framing of the contribution rule itself\u2014specifically, whether the rule states an exact requirement or an over-requirement\u2014affects cooperation and compliance remains underexplored. With the advent of LLM-based agents that interpret and reason about rules in natural language, we can study how rule framing influences agent behavior in a more nuanced way, simulating human-like responses to institutional messages.",
+            "Purpose": "This simulation aims to investigate how different framings of the contribution rule in a TPGG affect LLM agents' cooperation levels, rule compliance, and group efficiency. We seek to understand whether framing a rule as an 'exact' requirement versus an 'over' requirement leads to different emergent dynamics, such as rule violation, over-contribution, or stable cooperation.",
+            "ResearchQuestions": [
+                "1. Does framing the contribution rule as an 'over-requirement' (asking for more than the threshold) lead to higher rates of rule violation (non-compliance) compared to an 'exact requirement'?",
+                "2. Does the 'exact requirement' framing promote more stable and consistent cooperation over time?",
+                "3. How does rule framing affect group efficiency, measured by the prevalence of over-contribution (waste) and the probability of achieving the threshold?",
+                "4. How do LLM agents justify their contribution decisions in response to different rule framings, and do these justifications reflect deontological (rule-based) versus consequentialist reasoning?"
+            ],
+            "Hypotheses": [
+                "1. Over-requirement framing will lead to higher rates of rule violation (agents contributing less than asked) because the rule is perceived as unfair or overly demanding.",
+                "2. Exact requirement framing will result in more stable cooperation patterns, with agents aligning their contributions closely with the rule, reducing variance.",
+                "3. Over-requirement framing will increase over-contribution (waste) as some agents may still try to meet the higher ask, reducing group efficiency.",
+                "4. Agents in the exact condition will produce justifications that emphasize rule-following, while agents in the over condition will more frequently cite fairness or strategic adjustments."
+            ],
+            "RelatedWork": "Related work includes: (1) Threshold public goods game studies (Zhang et al., 2015) on insurance and provision; (2) Framing effects in behavioral economics (e.g., gain vs. loss frames) but not specifically on rule phrasing in TPGG; (3) LLM-agent simulations of social dilemmas (e.g., GovSim, CRSEC) focusing on norm compliance, but not on rule framing. Our work uniquely combines TPGG with LLM agents to test how natural language rule framing affects cooperation, bridging institutional design and multi-agent systems.",
+            "Abstract": "This study proposes a multi-agent simulation of a threshold public goods game (TPGG) using LLM-based agents to investigate the impact of rule framing on cooperation and compliance. Agents are grouped in small teams and must contribute tokens to a public pot; if the total meets or exceeds a threshold, all receive a reward. We manipulate the framing of the contribution rule: in the 'exact' condition, the rule states the precise threshold amount needed; in the 'over' condition, the rule asks for a higher amount than necessary. Agents decide their contribution via LLM reasoning, considering the rule, past interactions, and group outcomes. We measure contribution amounts, rule compliance, group success, and efficiency (over-contribution). We also analyze agents' natural language justifications for their decisions. This work sheds light on how institutional messaging can inadvertently shape collective action, with implications for designing rules in human-AI hybrid systems."
+        },
+        "SimulationRequirements": {
+            "Agents": {
+                "Count": "80 agents total, divided into 20 groups of 4 agents each (allows for between-group analysis). Group composition fixed across simulation runs.",
+                "RolesAndDescriptions": "All agents are contributors; no distinct roles. Each agent is an LLM-driven participant with the ability to reason about the rule and decide contribution amount.",
+                "StateSpec": "Each agent has: (1) `id` and `group_id`; (2) `memory` of past rounds (own contribution, group total, success/failure, others' contributions if observable); (3) `internal_rule_interpretation` (a text field updated via LLM reflection, capturing how the agent perceives the rule); (4) `compliance_tendency` (a dynamic scalar representing willingness to follow the rule, initialized randomly).",
+                "StateUpdate": "After each round, agents update memory. Every 3 rounds, agents undergo an LLM reflection to update `internal_rule_interpretation` and `compliance_tendency` based on experience. The reflection prompt asks the agent to explain its past decisions and adjust its strategy.",
+                "EnvironmentInteraction": "Agents interact by contributing to a group pot. They observe the rule framing at the start and receive feedback after each round (group total, success, individual payoff)."
+            },
+            "Environment": {
+                "Structure": "Multiple independent groups of 4 agents. No spatial structure; each group is isolated. The environment manages the public pot and threshold logic.",
+                "StateSpec": "For each group: `threshold` (fixed, e.g., 100 tokens), `pot` (sum of contributions), `success` (boolean if pot >= threshold), `over_contribution` (pot - threshold if pot > threshold).",
+                "UpdateRules": "Each round: (1) Agents make contributions. (2) Pot is summed. (3) If pot >= threshold, each agent receives reward = (pot * multiplier) / 4, minus their contribution. If pot < threshold, contributions are lost (no reward). (4) Environment resets pot for next round."
+            },
+            "Protocol": {
+                "TurnStructure": "Synchronous discrete rounds. Each round: 1. Rule reminder (displayed to agents via prompt). 2. Contribution phase (agents decide contribution simultaneously via LLM call). 3. Outcome calculation and feedback. 4. Reflection phase (every 3 rounds).",
+                "TerminationCondition": "After 20 rounds per group, or if all groups have reached a stable equilibrium (defined as no change in average contribution variance < 5% for 5 rounds).",
+                "TrialsPerPhase": "30 independent simulation runs per experimental condition (exact vs. over) to account for stochasticity.",
+                "DialogueFlow": "No direct agent-to-agent dialogue; agents only receive public information (rule, outcomes). However, during reflection, agents 'think' internally via LLM."
+            },
+            "Rules": {
+                "SharedInformation": "All agents know: the TPGG rules (threshold, reward multiplier, number of agents), the framing condition (exact or over), and that contributions are private unless specified otherwise. In each round, after contributions, all agents see the group total and whether the threshold was met.",
+                "PrivateInformation": "Each agent's contribution amount is private to others (unless we vary observability as an experimental condition). Memory and internal states are private.",
+                "PayoffStructure": "If pot >= threshold: each agent's payoff = (pot * 1.5) / 4 - contribution. If pot < threshold: payoff = -contribution. Multiplier set to 1.5 to create a social dilemma.",
+                "ExperimentConditions": [
+                    "Condition A (Exact): Rule states 'The group must contribute exactly 100 tokens in total to succeed.' (though exceeding is allowed, the rule emphasizes exactness).",
+                    "Condition B (Over): Rule states 'The group must contribute at least 120 tokens in total to succeed.' (threshold is actually 100, but rule asks for 120)."
+                ]
+            },
+            "Logging": {
+                "ContentToRecord": "Per round per agent: contribution amount, compliance (1 if contribution meets the rule's asked amount, else 0), payoff, internal_rule_interpretation text. Per group: pot total, success, over_contribution. Per simulation run: aggregate metrics over time.",
+                "LogFormat": "CSV for numerical data; JSON lines for textual justifications from reflection phases.",
+                "AnalysisMetrics": [
+                    "Average contribution per condition",
+                    "Rule compliance rate (percentage of contributions that meet the rule's asked amount)",
+                    "Group success rate (percentage of rounds threshold met)",
+                    "Efficiency waste (average over-contribution per successful round)",
+                    "Variance in contributions within groups",
+                    "Semantic analysis of justifications: frequency of rule-based vs. fairness-based language"
+                ],
+                "VerificationMethod": "Statistical comparisons (t-tests, mixed-effects models) between conditions for compliance, success, and waste. Time-series analysis of contribution trends. NLP analysis (e.g., sentiment, keyword extraction) on justifications to test hypothesis 4."
+            }
+        },
+        "RiskFactorsAndLimitations": [
+            "LLM Instability: LLM decisions may be noisy and sensitive to prompt phrasing. Mitigation: use consistent prompts, set temperature low, and run multiple trials.",
+            "Cost: Running LLM calls for 80 agents over 20 rounds could be expensive. Mitigation: use smaller open-source LLMs (e.g., Llama 3.1 8B) for contribution decisions, with caching.",
+            "Simplified Rule Framing: The binary framing may not capture all real-world nuances. Future work could include continuous variations.",
+            "Generalizability: Findings may be specific to the LLM's built-in biases about rules. We will test with at least two LLM families."
+        ]
+    }
+]

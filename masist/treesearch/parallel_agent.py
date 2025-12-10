@@ -1,19 +1,100 @@
 """
 ParallelAgent - 並列ノード処理エージェント
 AI-Scientist-v2/ai_scientist/treesearch/parallel_agent.py から移植
-Stage 1 (Initial Implementation) 専用版
+Stage 1-4 対応版（MASist 仕様）
 """
 from concurrent.futures import ProcessPoolExecutor, TimeoutError
 from typing import List, Optional, Any, Tuple
 import random
 import logging
+import os
+import humanize
 
 from .journal import Node, Journal
 from .node_processor import process_node_wrapper
 from .backend import query
-from .utils.response import extract_code, extract_text_up_to_code
+from .utils.response import extract_code, extract_text_up_to_code, wrap_code
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Utility Functions (from AI-Scientist-v2)
+# =============================================================================
+
+def _parse_keyword_prefix_response(
+    response: str, keyword_prefix1: str, keyword_prefix2: str
+) -> Tuple[Optional[str], Optional[str]]:
+    """Parse the response into name and description based on keyword prefix"""
+    try:
+        # Split response into lines and clean up
+        lines = [line.strip() for line in response.split("\n") if line.strip()]
+
+        # Find the idea and description
+        name = None
+        description = None
+
+        for line in lines:
+            if line.startswith(keyword_prefix1):
+                name = line.replace(keyword_prefix1, "").strip()
+            elif line.startswith(keyword_prefix2):
+                description = line.replace(keyword_prefix2, "").strip()
+                # Combine any following lines that don't start with a marker
+                desc_lines = []
+                for next_line in lines[lines.index(line) + 1 :]:
+                    if not next_line.startswith((keyword_prefix1, keyword_prefix2)):
+                        desc_lines.append(next_line)
+                    else:
+                        break
+                if desc_lines:
+                    description = " ".join([description] + desc_lines)
+
+        if name is None or description is None:
+            raise ValueError(
+                f"Missing required keywords in response: {keyword_prefix1} and/or {keyword_prefix2}"
+            )
+
+        return name, description
+
+    except Exception as e:
+        logger.error(f"Error parsing response: {str(e)}")
+        logger.debug(f"Raw response: {response}")
+        return None, None
+
+
+# =============================================================================
+# Data Classes for Stage 2-4 (from AI-Scientist-v2)
+# =============================================================================
+
+class AblationConfig:
+    """Track state of ablation experiments"""
+
+    def __init__(self, name: str, description: str, code: str, base_node: Node):
+        self.name = name
+        self.description = description
+        self.code = code
+        self.base_node = base_node
+        self.attempts = 0
+        self.max_attempts = 3  # Maximum number of retry attempts
+        self.last_error = None
+        self.completed = False
+        self.current_node = None
+
+
+class AblationIdea:
+    """Ablation idea"""
+
+    def __init__(self, name: str, description: str):
+        self.name = name
+        self.description = description
+
+
+class ParamTuningIdea:
+    """Simulation parameter tuning idea (MASist)"""
+
+    def __init__(self, name: str, description: str):
+        self.name = name
+        self.description = description
 
 
 class ParallelAgent:
@@ -64,7 +145,112 @@ class ParallelAgent:
         self.executor = ProcessPoolExecutor(max_workers=self.num_workers)
         self._is_shutdown = False
 
+        # Stage 2-4 state management (from AI-Scientist-v2)
+        self._ablation_state = {  # store ablation names
+            "completed_ablations": set(),
+        }
+        self._param_tuning_state = {  # store param tuning ideas (renamed from hyperparam)
+            "tried_params": set(),
+        }
+
+        # AG2 reference document for MASist
+        self.ag2_reference = self._load_ag2_reference()
+
         logger.info(f"ParallelAgent initialized with {self.num_workers} workers")
+
+    def _load_ag2_reference(self) -> str:
+        """Load AG2 quick reference document and replace placeholders with config values"""
+        doc_path = os.path.join(os.path.dirname(__file__), "..", "docs", "AG2_QUICK_REFERENCE.md")
+        try:
+            with open(doc_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # テンプレートプレースホルダーを設定値で置換
+            agent_sim_cfg = self.cfg.agent.agent_simulation
+            content = content.replace("{{AGENT_SIMULATION_MODEL}}", agent_sim_cfg.model)
+            content = content.replace("{{AGENT_SIMULATION_API_KEY_ENV}}", agent_sim_cfg.api_key_env)
+            content = content.replace("{{AGENT_SIMULATION_BASE_URL}}", agent_sim_cfg.base_url)
+            content = content.replace("{{AGENT_SIMULATION_TIMEOUT}}", str(agent_sim_cfg.timeout))
+
+            return content
+        except FileNotFoundError:
+            logger.warning(f"AG2 reference document not found at {doc_path}")
+            return ""
+
+    # =========================================================================
+    # MASist Shared Properties (Stage 1-4 共通)
+    # =========================================================================
+
+    @property
+    def _prompt_environment(self):
+        """Available packages for MASist simulations"""
+        pkgs = ["numpy", "pandas", "autogen", "matplotlib", "seaborn", "scikit-learn"]
+        random.shuffle(pkgs)
+        pkg_str = ", ".join([f"`{p}`" for p in pkgs])
+        return {
+            "Installed Packages": (
+                f"以下パッケージ利用可：{pkg_str}。"
+                "マルチエージェントフレームワークは autogen を必ず使用すること。"
+                "その他、可視化・データ処理用ライブラリは必要に応じて利用可。"
+            )
+        }
+
+    @property
+    def _prompt_impl_guideline(self):
+        """Implementation guideline for MASist simulations"""
+        impl_guideline = [
+            "【MASist シミュレーション要件】",
+            "  - Autogen によるエージェント定義・グループ対話・停止条件を用いた"
+            "    マルチエージェントシミュレーションパイプラインを構築すること。",
+            "  - エージェントのロール、内部状態、環境状態、終了条件を明示すること。",
+            "",
+            "【シミュレーション実行ルール ※重要※】",
+            "  - シミュレーションは「1つの条件（シナリオ）につき1回のみ」実行すること。",
+            "    （同じ条件を繰り返し実行して平均化したり、統計的に安定化させたりしない）",
+            "",
+            "  - ただし、Research idea に複数の条件（例：条件A と 条件B の比較）が含まれる場合、",
+            "    それぞれを別シナリオとして **1回ずつ** 実行し、比較できるようにしてよい。",
+            "",
+            "  - 重要：『反復禁止』の意味：",
+            "       ・同じ条件を複数回試行 → 禁止（統計的安定化のための繰り返しは不要）",
+            "       ・異なる条件のシナリオを各1回ずつ実行 → 許可（A/Bテスト、条件比較は OK）",
+            "",
+            "【experiment_data の構造】",
+            "  experiment_data = {",
+            "      'scenarios': {",
+            "          'CONDITION_A': {",
+            "              'messages': [...],     # 全メッセージログ（ターン順）",
+            "              'events': [...],       # 重要イベント（合意成立、衝突など）",
+            "              'metrics': {...},      # この条件の評価指標",
+            "              'config': {...},       # この条件の設定",
+            "          },",
+            "          'CONDITION_B': { ... },",
+            "      },",
+            "      'metrics': {...},              # 全条件の集約メトリクス（オプション）",
+            "  }",
+            "",
+            "【保存要件（ログ・メトリクス）※必須※】",
+            "  - **重要**: 必ず np.savez_compressed() で experiment_data を保存すること。",
+            "  - **JSON形式での保存は禁止**。必ず .npz 形式を使用すること。",
+            "  - **ファイル名は必ず 'experiment_data.npz' とすること**",
+            "  - 保存例:",
+            "       np.savez_compressed(f'{working_dir}/experiment_data.npz', experiment_data=np.array(experiment_data, dtype=object))",
+            "",
+            "【コード構造要件】",
+            "  - コードは以下の3行から始めること：",
+            "       import os",
+            "       working_dir = os.path.join(os.getcwd(), 'working')",
+            "       os.makedirs(working_dir, exist_ok=True)",
+            "  - **重要**: `if __name__ == \"__main__\":` ブロックは絶対に使用しないこと。",
+            "  - すべての実行コードはグローバルスコープに直接記述すること。",
+            f"  - 実行時間は {humanize.naturaldelta(self.cfg.exec.timeout)} 内で収まるよう、"
+            "    最大ターン数を適切に設定すること。",
+            "",
+            "【LLM設定 ※必須※】",
+            "  - AG2 API Reference セクションに記載された llm_config を**そのままコピー**して使用すること。",
+            "  - モデル名、API キー環境変数名、base_url を**絶対に変更しないこと**。",
+        ]
+        return {"Implementation guideline": impl_guideline}
 
     def _get_leaves(self, node: Node) -> List[Node]:
         """Get all leaf nodes in the tree rooted at node."""
@@ -138,7 +324,19 @@ class ParallelAgent:
                 except Exception as e:
                     logger.debug(f"Error getting debuggable nodes: {e}")
 
-            # === Improvement phase ===
+            # === Special handling for Stage 4 (Ablation Studies) ===
+            if self.stage_name and self.stage_name.startswith("4_"):
+                logger.debug(f"Stage 4: Using best_stage3_node for ablation")
+                nodes_to_process.append(self.best_stage3_node)
+                continue
+
+            # === Special handling for Stage 2 (Hyperparam tuning for baseline) ===
+            if self.stage_name and self.stage_name.startswith("2_"):
+                logger.debug(f"Stage 2: Using best_stage1_node for hyperparam tuning")
+                nodes_to_process.append(self.best_stage1_node)
+                continue
+
+            # === Improvement phase (Stage 1, 3) ===
             logger.debug("Checking good nodes for improvement...")
             good_nodes = self.journal.good_nodes
             if not good_nodes:
@@ -240,6 +438,12 @@ class ParallelAgent:
                     logger.debug(f"  Metric: {result_node.metric}")
                 if result_node.is_buggy:
                     logger.debug(f"  Node is buggy")
+
+                # Update state for Stage 2/4 (from AI-Scientist-v2)
+                if self.stage_name and self.stage_name.startswith("2_"):
+                    self._update_param_tuning_state(result_node)
+                elif self.stage_name and self.stage_name.startswith("4_"):
+                    self._update_ablation_state(result_node)
 
             except TimeoutError:
                 logger.error(f"Worker {i} timed out")
@@ -343,6 +547,14 @@ class ParallelAgent:
             except Exception as e:
                 logger.error(f"Error in multi-seed evaluation run {i}: {str(e)}")
 
+        # Fallback: if all seed evaluations failed, use the original best node
+        if not seed_nodes:
+            logger.warning(
+                f"All {num_seeds} seed evaluations failed (likely timeout). "
+                f"Falling back to original best node for aggregation."
+            )
+            return [node]
+
         return seed_nodes
 
     def _run_plot_aggregation(self, node: Node, seed_nodes: List[Node]) -> Optional[Node]:
@@ -410,8 +622,12 @@ class ParallelAgent:
                     for plot_file in plots_dir.glob("*.png"):
                         final_path = exp_results_dir / plot_file.name
                         plot_file.resolve().rename(final_path)
-                        agg_node.plots.append(str(final_path))
-                        agg_node.plot_paths.append(str(final_path.absolute()))
+                        # Create web-friendly relative path for HTML visualization
+                        # HTML is at: logs/0-run/stage_X_.../tree_plot.html
+                        # Images are at: logs/0-run/experiment_results/seed_aggregation_XXX/file.png
+                        web_path = f"../experiment_results/seed_aggregation_{agg_node.id}/{plot_file.name}"
+                        agg_node.plots.append(web_path)  # For visualization
+                        agg_node.plot_paths.append(str(final_path.absolute()))  # For programmatic access
 
                 agg_node.is_buggy = False
                 self.journal.append(agg_node)
@@ -436,6 +652,245 @@ class ParallelAgent:
                 "There should be no additional headings or text in your response. Just natural language text followed by a newline and then the markdown code block. "
             )
         }
+
+    # =========================================================================
+    # Stage 2-4 Prompt Formats (MASist 仕様)
+    # =========================================================================
+
+    @property
+    def _prompt_param_tuning_resp_fmt(self):
+        """Response format for Stage 2 parameter tuning (MASist)"""
+        return {
+            "Response format": (
+                "最初に、パラメータ調整の方針を7〜10文で簡潔に説明し、"
+                "その後に Autogen ベースのシミュレーション実装を含む単一の Python コードブロック"
+                "（ ```python ... ``` ）を提示してください。"
+                "コードは一つのファイルとして完結し、実行可能であること。"
+                "自然言語の説明 → 改行 → コードブロックの順で、余分な見出しは不要です。"
+            )
+        }
+
+    @property
+    def _prompt_ablation_resp_fmt(self):
+        """Response format for Stage 4 ablation studies (MASist)"""
+        return {
+            "Response format": (
+                "最初に、アブレーション研究の方針を7〜10文で簡潔に説明し、"
+                "その後に Autogen ベースのシミュレーション実装を含む単一の Python コードブロック"
+                "（ ```python ... ``` ）を提示してください。"
+                "コードは一つのファイルとして完結し、実行可能であること。"
+                "自然言語の説明 → 改行 → コードブロックの順で、余分な見出しは不要です。"
+            )
+        }
+
+    # =========================================================================
+    # Stage 2-4 Idea Generation Methods (MASist 仕様)
+    # =========================================================================
+
+    def _generate_param_tuning_idea(self) -> Optional[ParamTuningIdea]:
+        """Generate the next simulation parameter tuning idea (MASist).
+        This is for Stage 2 (baseline tuning).
+        """
+        tried = list(self._param_tuning_state["tried_params"])
+
+        param_tuning_prompt = {
+            "Introduction": (
+                "あなたは MASist（LLMマルチエージェント実験プラットフォーム）の"
+                "シミュレーションパラメータ調整を担当するAI研究者です。"
+                "Stage 1 で構築されたベースライン実装に対し、"
+                "シミュレーションパラメータを調整して結果を改善するアイデアを1つ提案してください。"
+                "例えば以下のようなパラメータが考えられますが、これに限らず自由に検討してください："
+                "- エージェント数（N）"
+                "- ラウンド数"
+                "- LLM温度（エージェントの意思決定の多様性）"
+                "- 報酬乗数やしきい値"
+                "- メモリ長（過去何ラウンド分を参照するか）"
+                "- その他、実験に適したパラメータ"
+            ),
+            "Research idea": self.task_desc,
+            "Base code you are working on": wrap_code(self.best_stage1_node.code),
+            "Previous Parameter Tuning Attempts": {
+                "Has been tried": tried if tried else "まだ何も試していません。",
+            },
+            "Instructions": {
+                "Requirements": [
+                    "1. 調整するシミュレーションパラメータを1つ特定する",
+                    "2. 過去の試行と異なるパラメータを選ぶ",
+                    "3. Research idea の実験タイプに適したパラメータを考慮する",
+                ]
+            },
+            "Response format": (
+                "最初の行は 'PARAM NAME: <パラメータ名>' で始めること。"
+                "2行目は 'DESCRIPTION: <説明>' で始め、"
+                "どのパラメータをなぜ調整するのか3〜5文で説明すること。"
+            ),
+        }
+
+        retry_count = 0
+        retry_limit = 5
+        while retry_count < retry_limit:
+            response = query(
+                system_message=param_tuning_prompt,
+                user_message=None,
+                model=self.cfg.agent.code.model,
+                temperature=self.cfg.agent.code.temp,
+            )
+
+            # Parse the response
+            param_name, param_description = _parse_keyword_prefix_response(
+                response, "PARAM NAME:", "DESCRIPTION:"
+            )
+            if param_name and param_description:
+                return ParamTuningIdea(
+                    name=param_name, description=param_description
+                )
+
+            retry_count += 1
+            logger.warning(
+                f"Failed to parse param tuning response (attempt {retry_count}/{retry_limit})"
+            )
+
+        logger.error(
+            f"Failed to parse param tuning response after {retry_limit} retries. Falling back to default idea of increasing rounds."
+        )
+        return ParamTuningIdea(
+            name="ラウンド数増加", description="ラウンド数を増やしてシミュレーションの安定性を確認"
+        )
+
+    def _generate_ablation_idea(self) -> Optional[AblationIdea]:
+        """Generate the next ablation idea for MASist simulation"""
+
+        # Prepare context of what's been tried
+        completed = list(self._ablation_state["completed_ablations"])
+
+        ablation_prompt = {
+            "Introduction": (
+                "あなたはアブレーション研究を行うAI研究者です。"
+                "現在の実装と過去のアブレーション（もしあれば）に基づいて、"
+                "シミュレーションの異なる側面をテストする新しいアブレーション研究を1つ提案してください。"
+            ),
+            "Base code you are working on": wrap_code(self.best_stage3_node.code),
+            "Previous Ablations": {
+                "Has been tried": completed if completed else "まだ何も試していません。",
+            },
+            "Instructions": {
+                "Requirements": [
+                    "1. 除去・無効化するシミュレーション機構を1つ特定する",
+                    "2. 過去の試行と異なるアブレーションを選ぶ",
+                    "3. 過去のアイデアのバリエーションではなく、新しいアイデアであること",
+                    "4. 1つの条件しかテストしていない場合は、複数条件のテストをアブレーションとして提案する",
+                ]
+            },
+            "Response format": (
+                "最初の行は 'ABLATION NAME: <アブレーション名>' で始めること。"
+                "2行目は 'ABLATION DESCRIPTION: <説明>' で始め、"
+                "どのコンポーネントをなぜアブレーションするのか3〜5文で説明すること。"
+            ),
+        }
+
+        retry_count = 0
+        retry_limit = 5
+        while retry_count < retry_limit:
+            response = query(
+                system_message=ablation_prompt,
+                user_message=None,
+                model=self.cfg.agent.code.model,
+                temperature=self.cfg.agent.code.temp,
+            )
+
+            # Parse the response
+            ablation_name, ablation_description = _parse_keyword_prefix_response(
+                response, "ABLATION NAME:", "ABLATION DESCRIPTION:"
+            )
+            if ablation_name and ablation_description:
+                return AblationIdea(
+                    name=ablation_name, description=ablation_description
+                )
+
+            retry_count += 1
+            logger.warning(
+                f"Failed to parse ablation response (attempt {retry_count}/{retry_limit})"
+            )
+
+        logger.error(
+            f"Failed to parse ablation response after {retry_limit} retries. Falling back to default idea."
+        )
+        return AblationIdea(
+            name="メモリ機構無効化",
+            description="エージェントのメモリ機構を無効化して、履歴参照の寄与度を測定"
+        )
+
+    # =========================================================================
+    # Stage 2-4 Node Generation Methods (MASist 仕様)
+    # =========================================================================
+
+    def _generate_param_tuning_node(
+        self, parent_node: Node, param_idea: ParamTuningIdea
+    ):
+        """Generate a node for Stage 2 parameter tuning (MASist)"""
+        prompt: Any = {
+            "Introduction": (
+                "あなたは MASist（LLMマルチエージェント実験プラットフォーム）の"
+                "シミュレーションエンジン開発を担うAI研究者です。"
+                "Stage 1 で構築されたベースライン実装に対し、以下のパラメータ調整を実装してください："
+                + param_idea.name + "。" + param_idea.description
+            ),
+            "Research idea": self.task_desc,
+            "Base code you are working on": wrap_code(parent_node.code),
+            "Instructions": {},
+        }
+        prompt["Instructions"] |= self._prompt_param_tuning_resp_fmt
+        prompt["Instructions"] |= {
+            "Parameter tuning guideline": [
+                "パラメータ調整の方針を7〜10文で簡潔に説明すること。",
+                "コアのエージェント行動ロジックは変更しないこと。",
+                "Research idea に複数条件の比較がある場合は各条件を1回ずつ実行。",
+                "同じ条件の繰り返し試行（統計的安定化）は不要。",
+                "マルチエージェントフレームワークは必ず Autogen を使用すること。",
+            ],
+            "Evaluation Metric(s)": self.evaluation_metrics,
+        }
+        prompt["Instructions"] |= self._prompt_impl_guideline
+        prompt["Instructions"] |= self._prompt_environment
+
+        # AG2リファレンスドキュメントを追加
+        if self.ag2_reference:
+            prompt["AG2 API Reference"] = self.ag2_reference
+
+        plan, code = self.plan_and_code_query(prompt)
+        return Node(
+            plan="Parameter tuning: " + param_idea.name + ".\n" + plan,
+            code=code,
+            parent=parent_node,
+            param_name=param_idea.name,
+        )
+
+    def _generate_ablation_node(self, parent_node: Node, ablation_idea: AblationIdea):
+        """Generate a node for Stage 4 ablation study (MASist)"""
+        prompt: Any = {
+            "Introduction": (
+                "あなたは経験豊富なAI研究者です。"
+                "以前に開発されたベースライン実装が提供されています。"
+                "以下のアイデアに対するアブレーション研究を実装してください："
+                + ablation_idea.name + "。" + ablation_idea.description
+            ),
+            "Base code you are working on": wrap_code(parent_node.code),
+            "Instructions": {},
+        }
+        prompt["Instructions"] |= self._prompt_resp_fmt
+        prompt["Instructions"] |= self._prompt_impl_guideline
+
+        # AG2リファレンスドキュメントを追加
+        if self.ag2_reference:
+            prompt["AG2 API Reference"] = self.ag2_reference
+
+        plan, code = self.plan_and_code_query(prompt)
+        return Node(
+            plan="Ablation study: " + ablation_idea.name + ".\n" + plan,
+            code=code,
+            parent=parent_node,
+            ablation_name=ablation_idea.name,
+        )
 
     def plan_and_code_query(self, prompt, retries=3) -> Tuple[str, str]:
         """Generate a natural language plan + code in the same LLM call and split them apart."""
@@ -491,7 +946,7 @@ class ParallelAgent:
             "Always close figures after saving",
             "Always include a title for each plot, and be sure to use clear subtitles while also specifying the scenario being visualized.",
             "Make sure to use descriptive names for figures when saving e.g. always include the scenario name and the type of plot in the name",
-            "When there are many similar figures to plot (e.g. generated samples at each epoch), make sure to plot only at a suitable interval of epochs so that you only plot at most 5 figures.",
+            "When there are many similar figures to plot (e.g. agent states at each round), make sure to plot only at a suitable interval of rounds so that you only plot at most 5 figures.",
             "Make sure to add legend for standard error bars and means if applicable",
         ]
 
@@ -573,6 +1028,46 @@ class ParallelAgent:
             code = "import matplotlib.pyplot as plt\nimport numpy as np\nimport os\n\n" + code
 
         return code
+
+    # =========================================================================
+    # Stage 2-4 State Update Methods (MASist 仕様)
+    # =========================================================================
+
+    def _update_param_tuning_state(self, result_node: Node):
+        """Update param tuning tracking state based on execution results (MASist)."""
+        if not self.stage_name or not self.stage_name.startswith("2_"):
+            return
+
+        param_name = getattr(result_node, 'param_name', None)
+        if param_name is None:
+            logger.warning(
+                f"param_name is None for result_node: {result_node.id}"
+            )
+            return
+
+        if not result_node.is_buggy:
+            self._param_tuning_state["tried_params"].add(param_name)
+            logger.info(f"Parameter tuning {param_name} ran successfully")
+        else:
+            logger.warning(f"Parameter tuning {param_name} failed")
+
+    def _update_ablation_state(self, result_node: Node):
+        """Update ablation tracking state based on execution results.
+
+        Args:
+            result_node: Node containing ablation execution results
+        """
+        if not self.stage_name or not self.stage_name.startswith("4_"):
+            return
+
+        ablation_name = result_node.ablation_name
+        if ablation_name is None:
+            print(f"[red]ablation_name is None for result_node: {result_node.id}[/red]")
+            return
+
+        if not result_node.is_buggy:
+            self._ablation_state["completed_ablations"].add(ablation_name)
+            logger.info(f"Ablation {ablation_name} completed successfully")
 
     def cleanup(self):
         """Cleanup resources."""

@@ -177,7 +177,7 @@ if os.path.exists(npz_path):
     def _structure_metrics(self, node: Node, metrics_exec_result: ExecutionResult):
         """Step 3: Structure metrics using LLM function calling"""
         metrics_prompt = {
-            "Introduction": "Parse the metrics from the execution output. You only need the final or best value of a metric for each dataset, not the entire list during training.",
+            "Introduction": "Parse the metrics from the execution output. You only need the final or aggregated value of a metric for each scenario/condition, not the entire time series during simulation.",
             "Execution Output": metrics_exec_result.term_out,
         }
 

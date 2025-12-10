@@ -123,19 +123,20 @@ class StageTransition:
 class AgentManager:
     def __init__(self, task_desc: str, cfg: Any, workspace_dir: Path):
         self.task_desc = json.loads(task_desc)
-        # MASist専用キーチェック
-        required_keys = [
+        # Key mapping for compatibility (MASIST format -> AI-Scientist-v2 format)
+        if "Short Hypothesis" not in self.task_desc and "Hypothesis" in self.task_desc:
+            self.task_desc["Short Hypothesis"] = self.task_desc["Hypothesis"]
+        if "Experiments" not in self.task_desc and "Experimental Conditions" in self.task_desc:
+            self.task_desc["Experiments"] = self.task_desc["Experimental Conditions"]
+        for k in [
             "Title",
-            "Name",
-            "SimulationRequest",
-            "SimulationRequirements",
-            "Logging",
-        ]
-        for k in required_keys:
+            "Abstract",
+            "Short Hypothesis",
+            "Experiments",
+            "Risk Factors and Limitations",
+        ]:
             if k not in self.task_desc.keys():
                 raise ValueError(f"Key {k} not found in task_desc")
-        # AI-Scientist-v2互換キーを内部生成
-        self._generate_compat_keys()
         self.cfg = cfg
         self.workspace_dir = workspace_dir
         self.current_stage_number = 0
@@ -171,18 +172,6 @@ class AgentManager:
         }
         # Create initial stage
         self._create_initial_stage()
-
-    def _generate_compat_keys(self):
-        """MASistキーからAI-Scientist-v2互換キーを生成"""
-        sr = self.task_desc["SimulationRequest"]
-        self.task_desc["Abstract"] = f"{sr.get('Background', '')}\n\n{sr.get('Purpose', '')}"
-        hypotheses = sr.get("Hypotheses", [])
-        if isinstance(hypotheses, list):
-            self.task_desc["Short Hypothesis"] = "\n".join(hypotheses)
-        else:
-            self.task_desc["Short Hypothesis"] = str(hypotheses)
-        self.task_desc["Experiments"] = self.task_desc["SimulationRequirements"].get("Rules", {}).get("ExperimentConditions", [])
-        self.task_desc["Risk Factors and Limitations"] = self.task_desc.get("Other", "")
 
     def _get_max_iterations(self, stage_number: int) -> int:
         """Get max iterations for a stage from config or default"""
@@ -473,12 +462,13 @@ Your research idea:\n\n
             1. Figure Analysis:
             {vlm_feedback}
 
-            2. Datasets Tested: {best_node.datasets_successfully_tested}
+            2. Scenarios Tested: {best_node.datasets_successfully_tested}
 
             Requirements for completion:
-            1. Training curves should show stable convergence
-            2. Results should be tested on at least two datasets
-            3. No major instabilities or issues in the plots
+            1. Multiple experimental conditions tested (communication modes, framing, agent configurations, etc.)
+            2. Meaningful variation in metrics across conditions (not identical results)
+            3. No major errors or crashes in the simulation
+            4. Evidence of systematic parameter exploration
 
             Provide a detailed evaluation of completion status.
             """
@@ -530,12 +520,14 @@ Your research idea:\n\n
             ):
                 if exec_time_minutes < self.cfg.exec.timeout / 60 / 2:
                     exec_time_feedback = (
-                        f"Implementation works but runs too quickly ({exec_time_minutes:.2f} minutes)."
-                        "We have up to 60 minutes available for each experiment."
+                        f"Implementation works but runs too quickly ({exec_time_minutes:.2f} minutes). "
+                        "We have up to 60 minutes available for each experiment. "
                         "Make sure to scale up the experiment "
-                        "by increasing the number of epochs, using a larger model, or working with bigger datasets."
-                        "Given that the current execution time is {exec_time_minutes:.2f} minutes, think about how changing the number of epochs to run, or using a larger model, or working with bigger datasets to run"
-                        "will affect the execution time, and make sure to scale up the experiment accordingly."
+                        "by increasing the number of simulation rounds, adding more agents, "
+                        "testing more scenarios/conditions, or increasing the complexity of agent interactions. "
+                        f"Given that the current execution time is {exec_time_minutes:.2f} minutes, think about how "
+                        "changing max_rounds, number of agents, or number of experimental conditions "
+                        "will affect the execution time, and scale up the experiment accordingly."
                     )
                     print(f"[cyan]exec_time_feedback: {exec_time_feedback}[/cyan]")
                     self.journals[stage.name].nodes[
@@ -578,6 +570,14 @@ Your research idea:\n\n
         issues = self._identify_issues(journal)
         progress = self._analyze_progress(journal)
 
+        # Extract best node info for prompt
+        best_node = metrics.get("best_node")
+        best_node_id = best_node.id[:8] if best_node else "N/A"
+        selection_reasoning = (
+            best_node.analysis[:300] if best_node and best_node.analysis else "N/A"
+        )
+        metrics_summary = metrics.get("metrics_summary", "N/A")
+
         # Create prompt for the LLM
         prompt = f"""
         Based on the current experimental progress, generate focused goals for the next sub-stage.
@@ -588,7 +588,9 @@ Your research idea:\n\n
         Current Progress:
         - Total attempts: {metrics['total_nodes']}
         - Successful implementations: {metrics['good_nodes']}
-        - Best performance: {metrics['best_metric']['value'] if metrics['best_metric'] else 'N/A'}
+        - Metrics tracked: {metrics_summary}
+        - Selected implementation: {best_node_id}
+        - Selection reasoning: {selection_reasoning}
         - Convergence status: {progress['convergence_status']}
 
         Current Issues:
@@ -880,12 +882,16 @@ Your research idea:\n\n
                     prompt_parts.append(f"- {analysis['analysis']}")
 
             # Format other metrics and findings
+            best_node = previous_results['metrics'].get('best_node')
+            best_node_id = best_node.id[:8] if best_node else 'N/A'
+            tracked_metrics = previous_results['metrics'].get('metrics_summary', 'N/A')
             metrics_summary = (
                 f"Progress Summary:\n"
                 f"- Total attempts: {previous_results['metrics']['total_nodes']}\n"
                 f"- Successful implementations: {previous_results['metrics']['good_nodes']}\n"
                 f"- Failed attempts: {previous_results['metrics']['buggy_nodes']}\n"
-                f"- Best performance: {previous_results['metrics']['best_metric']['value'] if previous_results['metrics']['best_metric'] else 'N/A'}\n"
+                f"- Metrics tracked: {tracked_metrics}\n"
+                f"- Selected implementation: {best_node_id}\n"
                 f"- Issues identified: {', '.join(previous_results['issues'])}\n"
                 f"- Progress status: {previous_results['progress']['convergence_status']}"
             )
@@ -1051,7 +1057,8 @@ Your research idea:\n\n
             "total_nodes": len(journal.nodes),
             "good_nodes": len(journal.good_nodes),
             "buggy_nodes": len(journal.buggy_nodes),
-            "best_metric": None,
+            "best_node": None,
+            "metrics_summary": "",
             "node_summaries": [],
             "vlm_feedback": [],
         }
@@ -1069,22 +1076,17 @@ Your research idea:\n\n
 
         best_node = journal.get_best_node(cfg=self.cfg)
         if best_node:
-            metrics["best_metric"] = {
-                "value": best_node.metric.value,
-                "name": (
-                    best_node.metric.name
-                    if hasattr(best_node.metric, "name")
-                    else "validation_metric"
-                ),
-                "maximize": (
-                    best_node.metric.maximize
-                    if hasattr(best_node.metric, "maximize")
-                    else False
-                ),
-                "analysis": (
-                    best_node.analysis if hasattr(best_node, "analysis") else None
-                ),
-            }
+            metrics["best_node"] = best_node
+
+            # Extract metric names for summary
+            if best_node.metric and best_node.metric.value:
+                metric_value = best_node.metric.value
+                if isinstance(metric_value, dict) and "metric_names" in metric_value:
+                    metric_names = [m["metric_name"] for m in metric_value["metric_names"]]
+                    metrics["metrics_summary"] = ", ".join(metric_names)
+                else:
+                    # Legacy format
+                    metrics["metrics_summary"] = best_node.metric.name or "value"
 
         return metrics
 
@@ -1179,10 +1181,10 @@ Your research idea:\n\n
         {json.dumps(previous_results.get('progress', {}), indent=2)}
 
         Expected Stage Progression:
-        1. Initial Implementation: Focus on basic working implementation
-        2. Baseline Tuning: Systematic optimization of core parameters
-        3. Creative Research: Novel improvements and approaches
-        4. Ablation Studies: Systematic component analysis
+        1. Initial Implementation: Focus on basic working multi-agent simulation
+        2. Baseline Tuning: Systematic variation of simulation parameters (conditions, agents, environments)
+        3. Creative Research: Novel experimental designs and hypothesis testing
+        4. Ablation Studies: Systematic analysis of which factors contribute to observed effects
 
         Consider factors like:
         - Progress toward stage goals

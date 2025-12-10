@@ -104,7 +104,6 @@ def cfg_to_tree_struct(cfg, jou: Journal, out_path: Path = None):
                         "metric_names": [
                             {
                                 "metric_name": n.metric.name or "value",
-                                "lower_is_better": not n.metric.maximize,
                                 "description": n.metric.description or "",
                                 "data": [
                                     {

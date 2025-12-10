@@ -10,7 +10,7 @@ from masist.llm import get_response_from_llm, extract_json_between_markers
 from masist.treesearch.backend import get_ai_client
 
 
-report_summarizer_sys_msg = """You are an expert machine learning researcher.
+report_summarizer_sys_msg = """You are an expert multi-agent simulation researcher.
 You are given multiple experiment logs, each representing a node in a stage of exploring scientific ideas and implementations.
 Your task is to aggregate these logs and provide scientifically insightful information.
 
@@ -207,7 +207,7 @@ def update_summary(
     )
     try:
         response = get_response_from_llm(
-            prompt, client, model, "You are an expert machine learning researcher."
+            prompt, client, model, "You are an expert multi-agent simulation researcher."
         )
         summary_json = extract_json_between_markers(response[0])
         assert summary_json
@@ -266,10 +266,10 @@ def annotate_history(journal, cfg=None):
             retry_count = 0
             while retry_count < max_retries:
                 try:
-                    if cfg.agent.get("summary", None) is not None:
+                    if cfg and cfg.agent.get("summary", None) is not None:
                         model = cfg.agent.summary.model
                     else:
-                        model = "gpt-4o-2024-08-06"
+                        model = "deepseek-chat"  # AI-MASISTデフォルト
                     client = get_ai_client(model)
                     response = get_response_from_llm(
                         overall_plan_summarizer_prompt.format(
@@ -338,10 +338,10 @@ def overall_summarize(journals, cfg=None):
             ]
             return [get_node_log(n) for n in good_leaf_nodes]
         elif idx == 0:
-            if cfg.agent.get("summary", None) is not None:
+            if cfg and cfg.agent.get("summary", None) is not None:
                 model = cfg.agent.summary.get("model", "")
             else:
-                model = "gpt-4o-2024-08-06"
+                model = "deepseek-chat"  # AI-MASISTデフォルト
             client = get_ai_client(model)
             summary_json = get_stage_summary(journal, stage_name, model, client)
             return summary_json

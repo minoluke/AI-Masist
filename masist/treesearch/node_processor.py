@@ -236,6 +236,22 @@ def process_node_wrapper(
                     exp_data_file.resolve().rename(exp_data_path)
                     logger.debug(f"Saved experiment data to {exp_data_path}")
 
+                # Move plot files (.png) and update plots with web-friendly paths
+                # (AI-Scientist-v2 compatible: plots should contain relative paths for HTML visualization)
+                child_node.plots = []  # Reset to update with correct paths
+                child_node.plot_paths = []  # Reset to update with correct paths
+                for plot_file in plots_dir.glob("*.png"):
+                    final_path = exp_results_dir / plot_file.name
+                    plot_file.resolve().rename(final_path)
+
+                    # Create a web-friendly relative path for HTML visualization
+                    # HTML is at: logs/0-run/stage_X_.../tree_plot.html
+                    # Images are at: logs/0-run/experiment_results/experiment_XXX/file.png
+                    web_path = f"../experiment_results/experiment_{child_node.id}_proc_{os.getpid()}/{plot_file.name}"
+                    child_node.plots.append(web_path)  # For visualization
+                    child_node.plot_paths.append(str(final_path.absolute()))  # For programmatic access
+                    logger.debug(f"Moved plot to {final_path}, web_path: {web_path}")
+
             except Exception as e:
                 logger.warning(f"[Node {node_id_short}] Plot generation failed (Phase 5)")
                 logger.error(f"[Node {node_id_short}] Error: {str(e)}")

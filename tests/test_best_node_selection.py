@@ -2,15 +2,16 @@
 Test script for get_best_node() with hypothesis validation
 
 テスト内容:
-- Test 1: use_val_metric_only=True の場合（メトリクス最大を選択）
-- Test 2: 単一ノードの場合（そのまま返す）
-- Test 3: LLM選択のモック（hypothesis_validation, scientific_soundness）
-- Test 4: LLMエラー時のフォールバック
-- Test 5: 無効なnode ID時のフォールバック
-- Test 6: プロンプト構造の検証
-- Test 7: seed_node の除外確認
-- Test 8: 実LLM呼び出し（統合テスト）
-- Test 9: return_selection_info=True で選択情報を取得・検証
+- Test 1: 単一ノードの場合（そのまま返す）
+- Test 2: LLM選択のモック（hypothesis_validation, scientific_soundness）
+- Test 3: LLMエラー時のフォールバック
+- Test 4: 無効なnode ID時のフォールバック
+- Test 5: プロンプト構造の検証
+- Test 6: seed_node の除外確認
+- Test 7: 実LLM呼び出し（統合テスト）
+- Test 8: return_selection_info=True で選択情報を取得・検証
+
+Note: use_val_metric_only は削除されました。MASist では全てLLM評価で選択します。
 """
 import sys
 import logging
@@ -64,34 +65,6 @@ def create_test_node(
     return node
 
 
-def test_use_val_metric_only():
-    """Test 1: use_val_metric_only=True uses max metric"""
-    print("=" * 80)
-    print("Test 1: use_val_metric_only=True")
-    print("=" * 80)
-
-    journal = Journal()
-
-    # Add nodes with different metrics
-    node1 = create_test_node("node1", 0.5)
-    node2 = create_test_node("node2", 0.9)  # Best metric
-    node3 = create_test_node("node3", 0.7)
-
-    journal.append(node1)
-    journal.append(node2)
-    journal.append(node3)
-
-    # Should return node with highest metric
-    best = journal.get_best_node(use_val_metric_only=True)
-
-    assert best is not None, "Should return a node"
-    assert best.id == "node2", f"Expected node2 (highest metric), got {best.id}"
-
-    print(f"✓ Selected node: {best.id} with metric {best.metric.value}")
-    print("✅ Test 1 PASSED")
-    return True
-
-
 def test_single_node():
     """Test 2: Single node returns immediately"""
     print("\n" + "=" * 80)
@@ -104,7 +77,7 @@ def test_single_node():
 
     # Should return the only node without LLM call
     with patch("masist.treesearch.journal.query") as mock_query:
-        best = journal.get_best_node(use_val_metric_only=False)
+        best = journal.get_best_node()
 
         # LLM should NOT be called for single node
         mock_query.assert_not_called()
@@ -198,7 +171,7 @@ def test_llm_fallback_on_error():
 
     # Mock LLM to raise an error
     with patch("masist.treesearch.journal.query", side_effect=Exception("API Error")):
-        best = journal.get_best_node(use_val_metric_only=False)
+        best = journal.get_best_node()
 
         # Should fall back to max metric
         assert best is not None, "Should return a node"
@@ -232,7 +205,7 @@ def test_llm_fallback_on_invalid_id():
     }
 
     with patch("masist.treesearch.journal.query", return_value=mock_response):
-        best = journal.get_best_node(use_val_metric_only=False)
+        best = journal.get_best_node()
 
         # Should fall back to max metric
         assert best is not None, "Should return a node"
@@ -283,7 +256,7 @@ def test_prompt_structure():
         }
 
     with patch("masist.treesearch.journal.query", side_effect=capture_prompt):
-        journal.get_best_node(use_val_metric_only=False, task_desc=task_desc)
+        journal.get_best_node(task_desc=task_desc)
 
     # Verify prompt structure
     assert captured_prompt is not None, "Prompt should be captured"
@@ -341,7 +314,7 @@ def test_seed_nodes_excluded():
         }
 
     with patch("masist.treesearch.journal.query", side_effect=capture_prompt):
-        journal.get_best_node(use_val_metric_only=False)
+        journal.get_best_node()
 
     candidates = captured_prompt["Candidates"]
     assert "node1" in candidates, "node1 should be in candidates"
@@ -435,14 +408,13 @@ def run_all_tests():
     results = []
 
     tests = [
-        ("Test 1: use_val_metric_only", test_use_val_metric_only),
-        ("Test 2: Single node", test_single_node),
-        ("Test 3: LLM selection with hypothesis", test_llm_selection_with_hypothesis),
-        ("Test 4: LLM error fallback", test_llm_fallback_on_error),
-        ("Test 5: Invalid node ID fallback", test_llm_fallback_on_invalid_id),
-        ("Test 6: Prompt structure", test_prompt_structure),
-        ("Test 7: Seed nodes excluded", test_seed_nodes_excluded),
-        ("Test 8: Real LLM call", test_with_real_llm),
+        ("Test 1: Single node", test_single_node),
+        ("Test 2: LLM selection with hypothesis", test_llm_selection_with_hypothesis),
+        ("Test 3: LLM error fallback", test_llm_fallback_on_error),
+        ("Test 4: Invalid node ID fallback", test_llm_fallback_on_invalid_id),
+        ("Test 5: Prompt structure", test_prompt_structure),
+        ("Test 6: Seed nodes excluded", test_seed_nodes_excluded),
+        ("Test 7: Real LLM call", test_with_real_llm),
     ]
 
     for name, test_func in tests:
@@ -476,16 +448,15 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         test_name = sys.argv[1]
         test_map = {
-            "1": test_use_val_metric_only,
-            "2": test_single_node,
-            "3": test_llm_selection_with_hypothesis,
-            "4": test_llm_fallback_on_error,
-            "5": test_llm_fallback_on_invalid_id,
-            "6": test_prompt_structure,
-            "7": test_seed_nodes_excluded,
-            "8": test_with_real_llm,
-            "9": test_return_selection_info,
-            "10": test_return_selection_info_with_real_llm,
+            "1": test_single_node,
+            "2": test_llm_selection_with_hypothesis,
+            "3": test_llm_fallback_on_error,
+            "4": test_llm_fallback_on_invalid_id,
+            "5": test_prompt_structure,
+            "6": test_seed_nodes_excluded,
+            "7": test_with_real_llm,
+            "8": test_return_selection_info,
+            "9": test_return_selection_info_with_real_llm,
         }
         if test_name in test_map:
             test_map[test_name]()
