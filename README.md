@@ -2,7 +2,7 @@
 
 ## 概要
 
-AI-MASistは、大規模言語モデル（LLM）を用いたマルチエージェントシミュレーション（MAS）の研究基盤です。自然言語によるシミュレーション設計から、実験実行、結果分析、論文執筆までを一貫して行います。
+AI-MASistは、大規模言語モデル（LLM）を用いたマルチエージェントシミュレーション（MAS）の研究基盤です。[AI-Scientist-v2](https://github.com/SakanaAI/AI-Scientist-v2)をベースに、MAS研究に特化した機能を追加・拡張しています。自然言語によるシミュレーション設計から、実験実行、結果分析、論文執筆までを一貫して行います。
 
 
 ## 背景と目的
@@ -10,7 +10,9 @@ AI-MASistは、大規模言語モデル（LLM）を用いたマルチエージ�
 ### マルチエージェントシミュレーション（MAS）とは
 
 マルチエージェントシミュレーション（MAS）は、複数の自律的なエージェントが相互作用する系をシミュレートする手法です。各エージェントは独自のルールや目標を持ち、他のエージェントや環境と相互作用しながら行動します。個々のエージェントの振る舞いから、集団レベルでの創発的な現象（市場の価格形成、交通渋滞、社会規範の形成など）を観察・分析できます。
-![MAS](./imgs/sim.png)
+<p align="center">
+  <img src="./imgs/sim.png" alt="MAS">
+</p>
 
 ### 将来のビジョン
 
@@ -21,7 +23,9 @@ AI-MASistは、大規模言語モデル（LLM）を用いたマルチエージ�
 - **金融市場分析**: 株式・為替の動向予測
 - **社会現象の理解**: 世論形成、情報拡散のメカニズム解明
 
-![MASによる将来予測のイメージ](./imgs/sim2.jpg)
+<p align="center">
+  <img src="./imgs/sim2.jpg" alt="MASによる将来予測のイメージ">
+</p>
 
 ### 現在のフェーズ
 
@@ -223,7 +227,7 @@ python -m masist.treesearch.perform_experiments_with_agentmanager \
 ## 参考文献
 
 - **AI-Scientist**: [SakanaAI/AI-Scientist](https://github.com/SakanaAI/AI-Scientist) - 本プロジェクトの基盤
-- **AI-Scientist-v2**: AI-Scientistの拡張版、コード改善ループを含む
+- **AI-Scientist-v2**: [SakanaAI/AI-Scientist-v2](https://github.com/SakanaAI/AI-Scientist-v2) AI-Scientistの拡張版、コード改善ループを含む
 
 
 ---
