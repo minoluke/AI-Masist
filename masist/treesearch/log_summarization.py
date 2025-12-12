@@ -185,10 +185,11 @@ def get_node_log(node):
         ret["exp_results_dir"] = short_dir_path
 
         if os.path.isdir(original_dir_path):
-            npy_files = [f for f in os.listdir(original_dir_path) if f.endswith(".npy")]
-            # Prepend the shortened path to each .npy filename
+            # Include both .npy and .npz files (MASist uses .npz format)
+            data_files = [f for f in os.listdir(original_dir_path) if f.endswith((".npy", ".npz"))]
+            # Prepend the shortened path to each data filename
             ret["exp_results_npy_files"] = [
-                os.path.join(short_dir_path, f) for f in npy_files
+                os.path.join(short_dir_path, f) for f in data_files
             ]
         else:
             ret["exp_results_npy_files"] = []
@@ -297,13 +298,45 @@ def annotate_history(journal, cfg=None):
 
 
 def overall_summarize(journals, cfg=None):
+    import re
     from concurrent.futures import ThreadPoolExecutor
 
-    def process_stage(idx, stage_tuple):
+    def get_main_stage_num(stage_name):
+        """ステージ名からメインステージ番号を抽出
+        対応形式:
+          - 'stage_3_creative_research_1_first_attempt' -> 3 (ディレクトリ名形式)
+          - '3_creative_research_1_first_attempt' -> 3 (manager.journals形式)
+        """
+        match = re.match(r'^(?:stage_)?(\d+)_', stage_name)
+        return int(match.group(1)) if match else None
+
+    # メインステージごとにグループ化
+    journals_list = list(journals)
+    grouped = {}  # {1: [...], 2: [...], 3: [...], 4: [...]}
+    for stage_name, journal in journals_list:
+        num = get_main_stage_num(stage_name)
+        if num is not None:
+            if num not in grouped:
+                grouped[num] = []
+            grouped[num].append((stage_name, journal))
+
+    # 各メインステージから代表を選択（最後のサブステージを使用）
+    final_journals = []
+    for main_stage_num in [1, 2, 3, 4]:
+        if main_stage_num in grouped and grouped[main_stage_num]:
+            final_journals.append((main_stage_num, grouped[main_stage_num][-1]))
+        else:
+            final_journals.append((main_stage_num, (None, None)))
+
+    def process_stage(main_stage_num, stage_tuple):
         stage_name, journal = stage_tuple
+        if stage_name is None or journal is None:
+            return None
         annotate_history(journal, cfg=cfg)
-        if idx in [1, 2]:
+        if main_stage_num in [2, 3]:
             best_node = journal.get_best_node(cfg=cfg)
+            if not best_node:
+                return {"error": f"No best node found for stage {main_stage_num}"}
             # get multi-seed results and aggregater node
             child_nodes = best_node.children
             multi_seed_nodes = [
@@ -332,12 +365,12 @@ def overall_summarize(journals, cfg=None):
                         agg_node
                     ),
                 }
-        elif idx == 3:
+        elif main_stage_num == 4:
             good_leaf_nodes = [
                 n for n in journal.good_nodes if n.is_leaf and n.ablation_name
             ]
             return [get_node_log(n) for n in good_leaf_nodes]
-        elif idx == 0:
+        elif main_stage_num == 1:
             if cfg and cfg.agent.get("summary", None) is not None:
                 model = cfg.agent.summary.get("model", "")
             else:
@@ -351,9 +384,12 @@ def overall_summarize(journals, cfg=None):
     with ThreadPoolExecutor() as executor:
         results = list(
             tqdm(
-                executor.map(process_stage, range(len(list(journals))), journals),
+                executor.map(
+                    lambda x: process_stage(x[0], x[1]),
+                    final_journals
+                ),
                 desc="Processing stages",
-                total=len(list(journals)),
+                total=len(final_journals),
             )
         )
         draft_summary, baseline_summary, research_summary, ablation_summary = results
@@ -361,51 +397,43 @@ def overall_summarize(journals, cfg=None):
     return draft_summary, baseline_summary, research_summary, ablation_summary
 
 
-if __name__ == "__main__":
-    # Test
-    example_path = "logs/247-run"
+def regenerate_summaries(log_dir: str):
+    """
+    既存のjournal.jsonからsummary JSONを再生成する。
 
+    Usage:
+        python -m masist.treesearch.log_summarization --log_dir experiments/.../logs/0-run
+    """
     def load_stage_folders(base_path):
-        """
-        Load the folders that start with 'stage_' followed by a number.
-
-        Args:
-            base_path (str): The base directory path where stage folders are located.
-
-        Returns:
-            list: A sorted list of stage folder paths.
-        """
+        """stage_で始まるフォルダを読み込む"""
         stage_folders = []
         for folder_name in os.listdir(base_path):
             if folder_name.startswith("stage_"):
                 stage_folders.append(os.path.join(base_path, folder_name))
-        return sorted(stage_folders, key=lambda x: int(x.split("_")[1]))
+        return sorted(stage_folders, key=lambda x: int(os.path.basename(x).split("_")[1]))
 
     def reconstruct_journal(journal_data):
-        # Create a mapping of node IDs to Node instances
+        """journal.jsonからJournalオブジェクトを再構築"""
         id_to_node = {}
         for node_data in journal_data["nodes"]:
-            # Remove unused or invalid keys if needed
             if "actionable_insights_from_plots" in node_data:
                 del node_data["actionable_insights_from_plots"]
             node = Node.from_dict(node_data)
             id_to_node[node.id] = node
 
-        # Set up parent-child relationships using node2parent
         for node_id, parent_id in journal_data["node2parent"].items():
             child_node = id_to_node[node_id]
             parent_node = id_to_node[parent_id]
             child_node.parent = parent_node
             parent_node.children.add(child_node)
 
-        # Create a Journal and add all nodes
         journal = Journal()
         journal.nodes.extend(id_to_node.values())
-
         return journal
 
-    # Example usage
-    stage_folders = load_stage_folders(example_path)
+    print(f"Regenerating summaries from: {log_dir}")
+
+    stage_folders = load_stage_folders(log_dir)
     journals = []
     for index, folder in enumerate(stage_folders, start=1):
         print(f"Stage {index}: {folder}")
@@ -414,39 +442,50 @@ if __name__ == "__main__":
         if os.path.exists(journal_path):
             with open(journal_path, "r") as file:
                 journal_data = json.load(file)
-                print(f"Loaded journal.json for Stage {index}")
+                print(f"  Loaded journal.json")
         else:
-            print(f"No journal.json found for Stage {index}")
+            print(f"  No journal.json found, skipping")
+            continue
         journal = reconstruct_journal(journal_data)
         journals.append((stage_name, journal))
 
-    # Convert manager journals to list of (stage_name, journal) tuples
     (
         draft_summary,
         baseline_summary,
         research_summary,
         ablation_summary,
     ) = overall_summarize(journals)
-    log_dir = "logs/247-run"
-    draft_summary_path = log_dir + "/draft_summary.json"
-    baseline_summary_path = log_dir + "/baseline_summary.json"
-    research_summary_path = log_dir + "/research_summary.json"
-    ablation_summary_path = log_dir + "/ablation_summary.json"
 
-    with open(draft_summary_path, "w") as draft_file:
-        json.dump(draft_summary, draft_file, indent=2)
+    draft_summary_path = os.path.join(log_dir, "draft_summary.json")
+    baseline_summary_path = os.path.join(log_dir, "baseline_summary.json")
+    research_summary_path = os.path.join(log_dir, "research_summary.json")
+    ablation_summary_path = os.path.join(log_dir, "ablation_summary.json")
 
-    with open(baseline_summary_path, "w") as baseline_file:
-        json.dump(baseline_summary, baseline_file, indent=2)
+    with open(draft_summary_path, "w") as f:
+        json.dump(draft_summary, f, indent=2)
+    with open(baseline_summary_path, "w") as f:
+        json.dump(baseline_summary, f, indent=2)
+    with open(research_summary_path, "w") as f:
+        json.dump(research_summary, f, indent=2)
+    with open(ablation_summary_path, "w") as f:
+        json.dump(ablation_summary, f, indent=2)
 
-    with open(research_summary_path, "w") as research_file:
-        json.dump(research_summary, research_file, indent=2)
+    print(f"\nSummary reports written:")
+    print(f"  - {draft_summary_path}")
+    print(f"  - {baseline_summary_path}")
+    print(f"  - {research_summary_path}")
+    print(f"  - {ablation_summary_path}")
 
-    with open(ablation_summary_path, "w") as ablation_file:
-        json.dump(ablation_summary, ablation_file, indent=2)
 
-    print(f"Summary reports written to files:")
-    print(f"- Draft summary: {draft_summary_path}")
-    print(f"- Baseline summary: {baseline_summary_path}")
-    print(f"- Research summary: {research_summary_path}")
-    print(f"- Ablation summary: {ablation_summary_path}")
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Regenerate summary JSONs from existing journal.json files"
+    )
+    parser.add_argument(
+        "--log_dir",
+        required=True,
+        help="Path to log directory (e.g., experiments/.../logs/0-run)",
+    )
+    args = parser.parse_args()
+    regenerate_summaries(args.log_dir)

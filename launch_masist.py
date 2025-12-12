@@ -14,10 +14,12 @@ import argparse
 import shutil
 import re
 import sys
+import yaml
 from datetime import datetime
 from contextlib import contextmanager
 
 from masist.llm import create_client
+from masist.vlm import create_client as create_vlm_client
 from masist.treesearch.perform_experiments_with_agentmanager import (
     perform_experiments_bfts,
 )
@@ -51,7 +53,7 @@ def parse_arguments():
     parser.add_argument(
         "--load_ideas",
         type=str,
-        required=True,
+        required=False,
         help="Path to a JSON file containing pregenerated ideas (array format)",
     )
     parser.add_argument(
@@ -146,6 +148,24 @@ def parse_arguments():
         "--skip_review",
         action="store_true",
         help="If set, skip the review process",
+    )
+    parser.add_argument(
+        "--only_review",
+        type=str,
+        default=None,
+        help="Run only review on existing experiment folder (e.g., experiments/2025-12-11_...)",
+    )
+    parser.add_argument(
+        "--from_plotting",
+        type=str,
+        default=None,
+        help="Run from plot aggregation on existing experiment folder",
+    )
+    parser.add_argument(
+        "--from_writeup",
+        type=str,
+        default=None,
+        help="Run from writeup on existing experiment folder (skips plot aggregation)",
     )
 
     return parser.parse_args()
@@ -246,12 +266,155 @@ def cleanup_processes():
             continue
 
 
+def run_review_only(idea_dir, config_path, model_review):
+    """既存の実験フォルダに対してレビューのみ実行"""
+    print_time()
+    print(f"Running review only on: {idea_dir}")
+
+    pdf_path = find_pdf_path_for_review(idea_dir)
+    if not pdf_path or not os.path.exists(pdf_path):
+        print("No PDF found for review.")
+        return
+
+    print(f"Paper found at: {pdf_path}")
+
+    # テキストレビュー
+    paper_content = load_paper(pdf_path)
+    client, client_model = create_client(model_review)
+    review_text = perform_review(paper_content, client_model, client)
+
+    # VLMレビュー（configのvlm_feedback.modelを使用）
+    with open(config_path, "r") as f:
+        cfg = yaml.safe_load(f)
+    vlm_model = cfg.get("treesearch", {}).get("vlm_feedback", {}).get("model", "gpt-4o-mini")
+    vlm_client, vlm_model = create_vlm_client(vlm_model)
+    review_img_cap_ref = perform_imgs_cap_ref_review(
+        vlm_client, vlm_model, pdf_path
+    )
+
+    # レビュー結果保存
+    with open(osp.join(idea_dir, "review_text.txt"), "w") as f:
+        f.write(json.dumps(review_text, indent=4, ensure_ascii=False))
+    with open(osp.join(idea_dir, "review_img_cap_ref.json"), "w") as f:
+        json.dump(review_img_cap_ref, f, indent=4, ensure_ascii=False)
+
+    print("Paper review completed.")
+
+
+def run_from_plotting(idea_dir, args):
+    """既存の実験フォルダからプロット集約以降を実行"""
+    print_time()
+    print(f"Running from plotting: {idea_dir}")
+
+    # experiment_results が idea_dir にない場合、logs からコピー
+    exp_results_src = osp.join(idea_dir, "logs/0-run/experiment_results")
+    exp_results_dst = osp.join(idea_dir, "experiment_results")
+    if os.path.exists(exp_results_src) and not os.path.exists(exp_results_dst):
+        print("Copying experiment_results from logs/0-run...")
+        shutil.copytree(exp_results_src, exp_results_dst, dirs_exist_ok=True)
+
+    # summary JSONが存在するか確認
+    log_dir = osp.join(idea_dir, "logs/0-run")
+    if not os.path.exists(log_dir):
+        print(f"Error: {log_dir} not found")
+        return False
+
+    # === プロット集約 ===
+    print_time()
+    print("Running plot aggregation...")
+    aggregate_plots(base_folder=idea_dir, model=args.model_agg_plots)
+
+    # === 論文執筆以降 ===
+    return run_from_writeup(idea_dir, args)
+
+
+def run_from_writeup(idea_dir, args):
+    """既存の実験フォルダからwriteup以降を実行"""
+    print_time()
+    print(f"Running from writeup: {idea_dir}")
+
+    # === 論文執筆 ===
+    if not args.skip_writeup:
+        print_time()
+        print("Starting paper writeup...")
+
+        # 引用収集
+        print("Gathering citations...")
+        citations_text = gather_citations(
+            idea_dir,
+            num_cite_rounds=args.num_cite_rounds,
+            small_model=args.model_citation,
+        )
+
+        # 論文生成（リトライ付き）
+        writeup_success = False
+        page_limit = 8 if args.writeup_type == "normal" else 4
+
+        for attempt in range(args.writeup_retries):
+            print(f"Writeup attempt {attempt + 1} of {args.writeup_retries}")
+            writeup_success = perform_writeup(
+                base_folder=idea_dir,
+                small_model=args.model_writeup_small,
+                big_model=args.model_writeup,
+                page_limit=page_limit,
+                citations_text=citations_text,
+            )
+            if writeup_success:
+                print("Writeup completed successfully!")
+                break
+
+        if not writeup_success:
+            print("Writeup process did not complete successfully after all retries.")
+            return False
+    else:
+        print("Skipping writeup (--skip_writeup)")
+
+    # === レビュー ===
+    if not args.skip_review and not args.skip_writeup:
+        run_review_only(idea_dir, args.config, args.model_review)
+    else:
+        print("Skipping review (--skip_review or --skip_writeup)")
+
+    return True
+
+
 if __name__ == "__main__":
     args = parse_arguments()
 
     # 環境変数設定
     os.environ["AI_MASIST_ROOT"] = os.path.dirname(os.path.abspath(__file__))
     print(f"Set AI_MASIST_ROOT to {os.environ['AI_MASIST_ROOT']}")
+
+    # --only_review モード
+    if args.only_review:
+        if not os.path.isdir(args.only_review):
+            print(f"Error: {args.only_review} is not a valid directory")
+            sys.exit(1)
+        run_review_only(args.only_review, args.config, args.model_review)
+        sys.exit(0)
+
+    # --from_plotting モード
+    if args.from_plotting:
+        if not os.path.isdir(args.from_plotting):
+            print(f"Error: {args.from_plotting} is not a valid directory")
+            sys.exit(1)
+        success = run_from_plotting(args.from_plotting, args)
+        cleanup_processes()
+        sys.exit(0 if success else 1)
+
+    # --from_writeup モード
+    if args.from_writeup:
+        if not os.path.isdir(args.from_writeup):
+            print(f"Error: {args.from_writeup} is not a valid directory")
+            sys.exit(1)
+        success = run_from_writeup(args.from_writeup, args)
+        cleanup_processes()
+        sys.exit(0 if success else 1)
+
+    # 通常モードでは --load_ideas が必須
+    if not args.load_ideas:
+        print("Error: --load_ideas is required (unless using --only_review, --from_plotting, or --from_writeup)")
+        sys.exit(1)
 
     # アイデア読み込み（配列形式）
     with open(args.load_ideas, "r") as f:
@@ -387,9 +550,13 @@ if __name__ == "__main__":
             client, client_model = create_client(args.model_review)
             review_text = perform_review(paper_content, client_model, client)
 
-            # VLMレビュー
+            # VLMレビュー（configのvlm_feedback.modelを使用）
+            with open(args.config, "r") as f:
+                cfg = yaml.safe_load(f)
+            vlm_model = cfg.get("treesearch", {}).get("vlm_feedback", {}).get("model", "gpt-4o-mini")
+            vlm_client, vlm_model = create_vlm_client(vlm_model)
             review_img_cap_ref = perform_imgs_cap_ref_review(
-                client, client_model, pdf_path
+                vlm_client, vlm_model, pdf_path
             )
 
             # レビュー結果保存
