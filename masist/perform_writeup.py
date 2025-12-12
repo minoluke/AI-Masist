@@ -41,7 +41,7 @@ def remove_accents_and_clean(s):
     return ascii_str
 
 
-def compile_latex(cwd, pdf_file, timeout=30):
+def compile_latex(cwd, pdf_file, timeout=30, language="en"):
     print("GENERATING LATEX")
 
     # \bibliography{iclr2025} を \bibliography{iclr2025,references} に強制修正
@@ -72,12 +72,15 @@ def compile_latex(cwd, pdf_file, timeout=30):
                 f.write(references_content)
             print("Extracted and wrote references.bib from filecontents block")
 
+    # 言語に応じてコンパイラを選択（日本語の場合はlualatex）
+    latex_cmd = "lualatex" if language == "ja" else "pdflatex"
+
     # AI-Scientist-v2 と同じ設定（nonstopmode でエラーがあっても続行）
     commands = [
-        ["pdflatex", "-interaction=nonstopmode", "template.tex"],
+        [latex_cmd, "-interaction=nonstopmode", "template.tex"],
         ["bibtex", "template"],
-        ["pdflatex", "-interaction=nonstopmode", "template.tex"],
-        ["pdflatex", "-interaction=nonstopmode", "template.tex"],
+        [latex_cmd, "-interaction=nonstopmode", "template.tex"],
+        [latex_cmd, "-interaction=nonstopmode", "template.tex"],
     ]
 
     for command in commands:
@@ -673,6 +676,108 @@ with "latex" syntax highlighting, like so:
 ```
 """
 
+# === 日本語用プロンプト ===
+
+writeup_system_message_template_ja = """あなたは優秀なAI研究者であり、ICLR 2025の「I Can't Believe It's Not Better」(ICBINB) Workshopに論文を投稿しようとしています。
+このワークショップは、マルチエージェントシステムや社会シミュレーションにおける現実世界の落とし穴、課題、否定的または決定的でない結果を取り上げ、オープンな議論を促進することを目的としています。
+実験結果を正確に報告してください。
+
+本文は{page_limit}ページ以内（参考文献を除く）で、シングルカラム形式です。
+本文は必ず日本語で記述してください。ただし、以下は英語のままにしてください：
+- 図表のキャプション（Figure X: ... の形式）
+- 参考文献
+- 数式中の変数名
+
+{page_limit}ページを超えないでください。
+箇条書き（itemize/enumerate）の使用は最小限に抑えてください。必要な場合のみ、実質的な情報を含む場合にのみ使用してください。
+表と図が適切な位置と形式で配置されていることを確認してください。
+
+- 学会が定めた全体的なスタイルは変更しないでください。references.bibファイルの参照方法は現行のままにしてください。
+- スタイルファイル名(iclr2025)は変更しないでください。`\\usepackage{{iclr2025,times}}`はそのままにしてください。
+- \\graphicspathディレクティブを削除しないでください。削除すると図が見つかりません。
+- `Acknowledgements`セクションは追加しないでください。
+
+各セクションのヒント：
+
+- **タイトル（Title）**: キャッチーで情報量のあるタイトルにしてください。論文の内容がよく分かるものにしてください。2行以内に収めてください。
+
+- **概要（Abstract）**: 探求する課題や落とし穴の性質を簡潔に要約してください。なぜこれが現実世界での展開に重要なのか、簡潔な動機付けを行ってください。1つの連続した段落にしてください。
+
+- **はじめに（Introduction）**: 探求する問題や課題の概要を述べてください。なぜこの問題が重要なのか、特に実用的または現実世界の文脈で明確に述べてください。貢献や発見を要約してください。
+
+- **関連研究（Related Work）**: 類似の問題に取り組んだ、または類似の落とし穴に遭遇した関連論文やアプローチを引用してください。自分の発見と比較対照してください。
+
+- **背景（Background）**（オプション）: 必要に応じて技術的または専門的な背景を提供してください。
+
+- **手法（Method）/ 問題の議論**: 問題の文脈や、課題を強調するのに関連する手法を詳述してください。結果が厳密な改善でない場合は、部分的な成功や学んだ教訓を議論してください。
+
+- **実験（Experiments）**（該当する場合）: 持っているデータに従って結果を正直に提示してください。否定的、予期せぬ、または決定的でない発見は、このワークショップにとって有効な貢献です。落とし穴を示す図、表、または実例を含めてください。本文には最大4つの図を含めてください。その他の図は付録に配置してください。
+
+- **結論（Conclusion）**: 主な教訓や貢献を要約してください。次のステップや将来の方向性を提案し、これらの洞察がコミュニティが類似の問題を回避または克服するのにどのように役立つかを強調してください。
+
+- **付録（Appendix）**: 本文に収まらなかった補足資料を配置してください。補足資料にはより多くの情報と詳細（ハイパーパラメータ、アルゴリズムなど）を追加してください。補足資料にはより多くのプロットと表を追加してください。この情報が本文で既にカバーされていないことを確認してください。
+
+正しくコンパイル可能なLaTeXコードを書いてください。修正すべき一般的な間違いには以下が含まれます：
+- LaTeX構文エラー（閉じられていない数式、一致しない括弧など）
+- 重複した図ラベルや参照
+- エスケープされていない特殊文字: & % $ # _ {{ }} ~ ^ \\
+- 適切な表/図の閉じ方
+- ログにない新しい引用や結果を捏造しないでください。
+
+適切な引用の使用を確認してください：
+- 前のラウンドから変更がなくても、常に \\begin{{filecontents}}{{references.bib}} ... \\end{{filecontents}} 内に参考文献を含めてください。
+- 提供されたreferences.bibの内容からの引用を使用してください。
+- 各セクション（特に関連研究）には複数の引用が必要です。
+
+最終コードを返す際は、'latex'構文ハイライト付きのフェンス（トリプルバッククォート）で囲んでください。
+"""
+
+writeup_prompt_ja = """以下のアイデアについて論文を執筆してください：
+
+```markdown
+{task_desc}
+```
+
+実験サマリー（JSON）：
+```json
+{summaries}
+```
+
+最終プロット生成スクリプト（プロットの生成方法と凡例で使用される名前を確認するために使用してください）：
+```python
+{aggregator_code}
+```
+どのプロットを自然にサブフィギュアとしてグループ化できるかも検討してください。
+
+論文執筆に利用可能なプロット（これらのファイル名を使用してください）：
+```
+{plot_list}
+```
+
+VLMによる図の説明：
+```
+{plot_descriptions}
+```
+
+現在のLaTeX原稿の進捗：
+```latex
+{latex_writeup}
+```
+
+今すぐLaTeX原稿の最終版を作成してください。論文が一貫性があり、簡潔で、結果を正確に報告していることを確認してください。
+未記入のプレースホルダーなしで、ファイル全体を完全に返してください！
+これは4ページのシングルカラムワークショップ論文として適切な、完全なLaTeX原稿でなければなりません。
+references.bibファイルからの引用を使用してください。
+
+本文は日本語で記述し、図表のキャプション（Figure X: ... の形式）と参考文献は英語のままにしてください。
+
+'template.tex'の更新されたLaTeXコードを、以下のように'latex'構文ハイライト付きのトリプルバッククォートで囲んで提供してください：
+
+```latex
+<更新されたLaTeXコード>
+```
+"""
+
 
 def load_idea_text(base_folder):
     """
@@ -895,19 +1000,22 @@ def perform_writeup(
     vlm_model="gpt-4o-mini",
     n_writeup_reflections=3,
     page_limit=4,
+    language="en",
 ):
-    pdf_file = osp.join(base_folder, f"{osp.basename(base_folder)}.pdf")
-    latex_folder = osp.join(base_folder, "latex")
+    # 言語サフィックスを追加（日本語の場合は _ja）
+    lang_suffix = "_ja" if language == "ja" else ""
+    pdf_file = osp.join(base_folder, f"{osp.basename(base_folder)}{lang_suffix}.pdf")
+    latex_folder = osp.join(base_folder, f"latex{lang_suffix}")
 
-    # Cleanup any previous latex folder and pdf
+    # Cleanup any previous latex folder and pdf (言語固有のもののみ)
     if osp.exists(latex_folder):
         shutil.rmtree(latex_folder)
     if osp.exists(pdf_file):
         os.remove(pdf_file)
 
-    # Remove any previous reflection PDFs
+    # Remove any previous reflection PDFs (言語固有のもののみ)
     for old_pdf in os.listdir(base_folder):
-        if old_pdf.endswith(".pdf") and "reflection" in old_pdf:
+        if old_pdf.endswith(".pdf") and lang_suffix in old_pdf:
             os.remove(osp.join(base_folder, old_pdf))
 
     try:
@@ -922,12 +1030,16 @@ def perform_writeup(
         combined_summaries_str = json.dumps(filtered_summaries_for_writeup, indent=2)
 
         # Prepare a new fresh latex folder
-        # Select template based on page_limit (8+ pages = ICML, else ICBINB)
+        # Select template based on page_limit (8+ pages = ICML, else ICBINB) and language
         if not osp.exists(osp.join(latex_folder, "template.tex")):
             if page_limit >= 8:
                 template_name = 'blank_icml_latex'
             else:
-                template_name = 'blank_icbinb_latex'
+                # 日本語の場合は日本語用テンプレートを使用
+                if language == "ja":
+                    template_name = 'blank_icbinb_latex_ja'
+                else:
+                    template_name = 'blank_icbinb_latex'
             # Use importlib.resources to get the path to template
             try:
                 # Python 3.9+
@@ -962,7 +1074,7 @@ def perform_writeup(
             aggregator_code = "No aggregator script found."
 
         if no_writing:
-            compile_latex(latex_folder, pdf_file)
+            compile_latex(latex_folder, pdf_file, language=language)
             return osp.exists(pdf_file)
 
         # If no citations provided, try to load from cache first
@@ -1025,14 +1137,23 @@ def perform_writeup(
             print(traceback.format_exc())
             plot_descriptions_str = "No descriptions available."
 
-        big_model_system_message = writeup_system_message_template.format(
-            page_limit=page_limit
-        )
+        # 言語に応じてシステムメッセージとプロンプトを選択
+        if language == "ja":
+            big_model_system_message = writeup_system_message_template_ja.format(
+                page_limit=page_limit
+            )
+            writeup_prompt_template = writeup_prompt_ja
+        else:
+            big_model_system_message = writeup_system_message_template.format(
+                page_limit=page_limit
+            )
+            writeup_prompt_template = writeup_prompt
+
         big_client, big_client_model = create_client(big_model)
         with open(writeup_file, "r") as f:
             writeup_text = f.read()
 
-        combined_prompt = writeup_prompt.format(
+        combined_prompt = writeup_prompt_template.format(
             task_desc=idea_text,
             summaries=combined_summaries_str,
             aggregator_code=aggregator_code,
@@ -1059,7 +1180,7 @@ def perform_writeup(
             f.write(updated_latex_code)
 
         # AI-Scientist-v2 と同じく compile_attempt カウンターを使用
-        base_pdf_file = osp.join(base_folder, osp.basename(base_folder))
+        base_pdf_file = osp.join(base_folder, f"{osp.basename(base_folder)}{lang_suffix}")
         compile_attempt = 0
 
         # Multiple reflection loops on the final LaTeX
@@ -1079,7 +1200,7 @@ def perform_writeup(
             # Compile current version before reflection
             current_pdf = base_pdf_file + f"_{compile_attempt}.pdf"
             print(f"[green]Compiling PDF for reflection {i+1}...[/green]")
-            compile_latex(latex_folder, current_pdf)
+            compile_latex(latex_folder, current_pdf, language=language)
             compile_attempt += 1
 
             review_img_cap_ref = perform_imgs_cap_ref_review(
@@ -1169,7 +1290,7 @@ Ensure proper citation usage:
                         fo.write(final_text)
 
                     current_pdf = base_pdf_file + f"_{compile_attempt}.pdf"
-                    compile_latex(latex_folder, current_pdf)
+                    compile_latex(latex_folder, current_pdf, language=language)
                     compile_attempt += 1
                     print(f"Compiled {current_pdf}")
                 else:
@@ -1239,7 +1360,7 @@ If you believe you are done with reflection, simply say: "I am done"."""
                         fo.write(final_text)
 
                     current_pdf = base_pdf_file + f"_{compile_attempt}.pdf"
-                    compile_latex(latex_folder, current_pdf)
+                    compile_latex(latex_folder, current_pdf, language=language)
                     compile_attempt += 1
                     print(f"Compiled {current_pdf}")
                 else:
@@ -1293,7 +1414,7 @@ USE MINIMAL EDITS TO OPTIMIZE THE PAGE LIMIT USAGE."""
                     fo.write(final_text)
 
                 current_pdf = base_pdf_file + f"_{compile_attempt}.pdf"
-                compile_latex(latex_folder, current_pdf)
+                compile_latex(latex_folder, current_pdf, language=language)
                 compile_attempt += 1
                 print(f"Compiled {current_pdf}")
             else:

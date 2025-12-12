@@ -132,6 +132,13 @@ def parse_arguments():
         default="deepseek-chat",
         help="Model to use for review main text and captions",
     )
+    parser.add_argument(
+        "--language",
+        type=str,
+        default="en",
+        choices=["en", "ja"],
+        help="Language for paper writeup (en=English, ja=Japanese)",
+    )
 
     # === スキップオプション ===
     parser.add_argument(
@@ -358,6 +365,7 @@ def run_from_writeup(idea_dir, args):
                 big_model=args.model_writeup,
                 page_limit=page_limit,
                 citations_text=citations_text,
+                language=args.language,
             )
             if writeup_success:
                 print("Writeup completed successfully!")
@@ -523,6 +531,7 @@ if __name__ == "__main__":
                 big_model=args.model_writeup,
                 page_limit=page_limit,
                 citations_text=citations_text,
+                language=args.language,
             )
             if writeup_success:
                 print("Writeup completed successfully!")
