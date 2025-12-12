@@ -44,6 +44,34 @@ def remove_accents_and_clean(s):
 def compile_latex(cwd, pdf_file, timeout=30):
     print("GENERATING LATEX")
 
+    # \bibliography{iclr2025} を \bibliography{iclr2025,references} に強制修正
+    template_path = os.path.join(cwd, "template.tex")
+    if os.path.exists(template_path):
+        with open(template_path, "r") as f:
+            content = f.read()
+        if r"\bibliography{iclr2025}" in content and r"\bibliography{iclr2025,references}" not in content:
+            content = content.replace(r"\bibliography{iclr2025}", r"\bibliography{iclr2025,references}")
+            with open(template_path, "w") as f:
+                f.write(content)
+            print("Fixed bibliography to include references.bib")
+
+    # template.tex から filecontents の内容を抽出して references.bib に直接書き込む
+    # (filecontents 環境は既存ファイルを上書きしないため、直接抽出する)
+    references_bib_path = os.path.join(cwd, "references.bib")
+    if os.path.exists(template_path):
+        with open(template_path, "r") as f:
+            tex_content = f.read()
+        match = re.search(
+            r'\\begin\{filecontents\}\{references\.bib\}(.*?)\\end\{filecontents\}',
+            tex_content,
+            re.DOTALL
+        )
+        if match:
+            references_content = match.group(1).strip()
+            with open(references_bib_path, "w") as f:
+                f.write(references_content)
+            print("Extracted and wrote references.bib from filecontents block")
+
     # AI-Scientist-v2 と同じ設定（nonstopmode でエラーがあっても続行）
     commands = [
         ["pdflatex", "-interaction=nonstopmode", "template.tex"],

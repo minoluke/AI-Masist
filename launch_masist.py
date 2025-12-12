@@ -99,7 +99,7 @@ def parse_arguments():
     parser.add_argument(
         "--model_agg_plots",
         type=str,
-        default="deepseek-chat",
+        default="deepseek-reasoner",
         help="Model to use for plot aggregation",
     )
     parser.add_argument(
