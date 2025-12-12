@@ -666,11 +666,12 @@ def load_idea_text(base_folder):
 def load_exp_summaries(base_folder):
     """
     Load the experiment summaries from the base folder.
+    Follows AI-Scientist-v2 path structure with logs/0-run/ prefix.
     """
     summary_files = [
-        ("baseline_summary.json", "BASELINE_SUMMARY"),
-        ("research_summary.json", "RESEARCH_SUMMARY"),
-        ("ablation_summary.json", "ABLATION_SUMMARY"),
+        ("logs/0-run/baseline_summary.json", "BASELINE_SUMMARY"),
+        ("logs/0-run/research_summary.json", "RESEARCH_SUMMARY"),
+        ("logs/0-run/ablation_summary.json", "ABLATION_SUMMARY"),
     ]
     loaded_summaries = {}
     for fname, key in summary_files:

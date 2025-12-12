@@ -90,11 +90,28 @@ Respond with a Python script in triple backticks.
 def extract_code_snippet(text: str) -> str:
     """
     Look for a Python code block in triple backticks in the LLM response.
-    Return only that code. If no code block is found, return the entire text.
+    Return only that code. If no code block is found, return empty string.
     """
-    pattern = r"```(?:python)?(.*?)```"
-    matches = re.findall(pattern, text, flags=re.DOTALL)
-    return matches[0].strip() if matches else text.strip()
+    # Try various patterns for code blocks
+    patterns = [
+        r"```python\s*\n(.*?)```",  # ```python\n...```
+        r"```python(.*?)```",        # ```python...``` (no newline)
+        r"```\s*\n(.*?)```",          # ```\n...```
+        r"```(.*?)```",               # ```...```
+    ]
+
+    for pattern in patterns:
+        matches = re.findall(pattern, text, flags=re.DOTALL)
+        if matches:
+            code = matches[0].strip()
+            # Ensure it looks like Python code (has import or def or basic structure)
+            if code and not code.startswith(("I am", "Looking", "I apologize")):
+                return code
+
+    # If no code block found, return empty string instead of entire text
+    # to avoid writing non-code content as Python script
+    print("Warning: No code block found in LLM response.")
+    return ""
 
 
 def run_aggregator_script(
@@ -139,12 +156,12 @@ def run_aggregator_script(
 def load_exp_summaries(base_folder):
     """
     Load the experiment summaries from the base folder.
-    Modified for AI-MASIST path structure (no logs/0-run/ prefix).
+    Follows AI-Scientist-v2 path structure with logs/0-run/ prefix.
     """
     summary_files = [
-        ("baseline_summary.json", "BASELINE_SUMMARY"),
-        ("research_summary.json", "RESEARCH_SUMMARY"),
-        ("ablation_summary.json", "ABLATION_SUMMARY"),
+        ("logs/0-run/baseline_summary.json", "BASELINE_SUMMARY"),
+        ("logs/0-run/research_summary.json", "RESEARCH_SUMMARY"),
+        ("logs/0-run/ablation_summary.json", "ABLATION_SUMMARY"),
     ]
     loaded_summaries = {}
     for fname, key in summary_files:
@@ -222,7 +239,7 @@ def filter_experiment_summaries(exp_summaries, step_name):
 
 def aggregate_plots(
     base_folder: str,
-    model: str = "deepseek-chat",
+    model: str = "deepseek-reasoner",
     n_reflections: int = 5
 ) -> None:
     """
@@ -230,7 +247,7 @@ def aggregate_plots(
 
     Args:
         base_folder: Path to the experiment folder with summary JSON files.
-        model: LLM model to use (default: deepseek-chat).
+        model: LLM model to use (default: deepseek-reasoner).
         n_reflections: Number of reflection steps to attempt (default: 5).
     """
     filename = "auto_plot_aggregator.py"
@@ -363,14 +380,9 @@ def main():
         help="Path to the experiment folder with summary JSON files.",
     )
     parser.add_argument(
-        "--task-desc",
-        required=True,
-        help="Task description string for the research.",
-    )
-    parser.add_argument(
         "--model",
-        default="deepseek-chat",
-        help="LLM model to use (default: deepseek-chat).",
+        default="deepseek-reasoner",
+        help="LLM model to use (default: deepseek-reasoner).",
     )
     parser.add_argument(
         "--reflections",
@@ -381,7 +393,6 @@ def main():
     args = parser.parse_args()
     aggregate_plots(
         base_folder=args.folder,
-        task_desc=args.task_desc,
         model=args.model,
         n_reflections=args.reflections,
     )
