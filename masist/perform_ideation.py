@@ -33,14 +33,13 @@ The IDEA JSON should use the following NESTED STRUCTURE:
 {
   "Name": "short_descriptor",
   "Title": "Catchy and Informative Title",
-
+  "Abstract": "Abstract summarizing the proposal (approximately 250 words)."
   "SimulationRequest": {
     "Background": "Background context, related social phenomena, theories, or prior research.",
     "Purpose": "What this simulation aims to clarify or demonstrate.",
-    "ResearchQuestions": ["Research question 1", "Research question 2"],
-    "Hypotheses": ["Hypothesis 1", "Hypothesis 2"],
+    "ResearchQuestions": ["Research question 1", "Research question 2",,,],
+    "Hypotheses": ["Hypothesis 1", "Hypothesis 2",,,],
     "RelatedWork": "Brief discussion of relevant prior work.",
-    "Abstract": "Abstract summarizing the proposal (approximately 250 words)."
   },
 
   "SimulationRequirements": {
@@ -66,7 +65,7 @@ The IDEA JSON should use the following NESTED STRUCTURE:
       "SharedInformation": "Information known to all agents",
       "PrivateInformation": "Information specific to each agent",
       "PayoffStructure": "(Optional) Reward/penalty structure",
-      "ExperimentConditions": ["Condition 1", "Condition 2"]
+      "ExperimentConditions": ["Condition 1", "Condition 2",,,]
     },
     "Logging": {
       "ContentToRecord": "What data to record during simulation",
@@ -76,7 +75,7 @@ The IDEA JSON should use the following NESTED STRUCTURE:
     }
   },
 
-  "RiskFactorsAndLimitations": ["Risk 1", "Risk 2"]
+  "RiskFactorsAndLimitations": ["Risk 1", "Risk 2",,,]
 }
 ```
 
@@ -113,14 +112,14 @@ IDEA JSONは以下の**ネスト構造**を使用してください：
 {
   "Name": "short_descriptor",
   "Title": "キャッチーで情報量のあるタイトル",
+  "Abstract": "カンファレンス形式で提案を要約（約250語）。"
 
   "SimulationRequest": {
     "Background": "背景・文脈。このシミュレーションの動機となる社会現象、理論、先行研究。",
     "Purpose": "目的。このシミュレーションで何を明らかにまたは実証したいか。",
-    "ResearchQuestions": ["研究質問1", "研究質問2"],
-    "Hypotheses": ["仮説1", "仮説2"],
+    "ResearchQuestions": ["研究質問1", "研究質問2",,,],
+    "Hypotheses": ["仮説1", "仮説2",,,],
     "RelatedWork": "関連する先行研究の簡潔な議論と、本提案がどのように異なるか。",
-    "Abstract": "カンファレンス形式で提案を要約（約250語）。"
   },
 
   "SimulationRequirements": {
@@ -146,7 +145,7 @@ IDEA JSONは以下の**ネスト構造**を使用してください：
       "SharedInformation": "全エージェントが知っている情報",
       "PrivateInformation": "各エージェント固有の情報",
       "PayoffStructure": "(任意) 報酬/ペナルティ構造",
-      "ExperimentConditions": ["条件1", "条件2"]
+      "ExperimentConditions": ["条件1", "条件2",,,]
     },
     "Logging": {
       "ContentToRecord": "シミュレーション中に記録するデータ",
@@ -156,7 +155,7 @@ IDEA JSONは以下の**ネスト構造**を使用してください：
     }
   },
 
-  "RiskFactorsAndLimitations": ["リスク1", "リスク2"]
+  "RiskFactorsAndLimitations": ["リスク1", "リスク2",,,]
 }
 ```
 

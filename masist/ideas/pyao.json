@@ -1,0 +1,74 @@
+[
+    {
+        "Name": "trivial_voting_coordination",
+        "Title": "Coordination without Conviction: Focal Points and Social Proof in Trivial Group Decisions",
+        "Abstract": "This study investigates the mechanisms driving collective outcomes in low-stakes, binary group decisions\u2014such as choosing a mascot name\u2014where individuals hold weak initial preferences. Drawing on theories of focal points, social proof, and preference falsification, we propose that in such 'trivial' decisions, institutional design cues (e.g., defaults, public voting, reason-giving) drive consensus primarily through coordination and conformity, not through persuasion or deep preference change. Using an agent-based simulation with LLM agents endowed with weak preferences and the ability to reason, we manipulate voting procedures (simultaneous vs. sequential, anonymous vs. public) and information cues (defaults, shared reasons). We measure the divergence between private preferences and public votes to quantify preference falsification and track the evolution of both private beliefs and public outcomes. Results are expected to show that coordination cues dominate persuasion, leading to rapid consensus even without underlying preference alignment. This work advances understanding of how trivial collective decisions form, highlighting the underappreciated power of procedural design in shaping seemingly inconsequential social outcomes.",
+        "SimulationRequest": {
+            "Background": "In many group decisions, the stakes are low and individual preferences are weak or malleable (e.g., choosing a team color). Classic models of opinion dynamics often assume fixed preferences or persuasive influence, but trivial decisions may be driven by coordination mechanisms like focal points (Schelling 1960), social proof, and preference falsification (Kuran 1995). Recent computational work (Duggins 2014; Le\u00f3n-Medina et al. 2019) models preference falsification in political opinions, but the domain of trivial choices remains unexplored. LLM agents offer a novel testbed because they can generate realistic justifications and mimic human-like reasoning in low-stakes contexts.",
+            "Purpose": "To disentangle the effects of persuasion (change in private preference) from coordination/conformity (public alignment without private change) in trivial group decisions, and to identify how procedural features act as focal points.",
+            "ResearchQuestions": [
+                "In trivial binary decisions, to what extent does group consensus result from persuasion versus coordination?",
+                "Which institutional features (public voting, sequential order, defaults, reason-giving) most strongly bias group outcomes toward a particular option?",
+                "How does the presence of reason-giving alter the dynamics of consensus formation and preference falsification?"
+            ],
+            "Hypotheses": [
+                "Coordination mechanisms (social proof, defaults) will produce higher rates of consensus than persuasion mechanisms in trivial decisions, even when initial preferences are evenly split.",
+                "Public and sequential voting will lead to higher rates of preference falsification (divergence between private preference and public vote) compared to anonymous simultaneous voting.",
+                "Short, easily transmitted reasons will serve as focal points, accelerating consensus and increasing the bandwagon effect."
+            ],
+            "RelatedWork": "Duggins (2014) models preference falsification and its impact on public norms. Le\u00f3n-Medina et al. (2019) examine how coherence heuristics interact with impression management. Our work differs by focusing on trivial decisions where preferences are inherently weak, and by using LLM agents to enable natural language reason-giving. Schelling's focal point theory is central but rarely tested in dynamic, multi-agent voting simulations."
+        },
+        "SimulationRequirements": {
+            "Agents": {
+                "Count": "30-50 agents per trial",
+                "RolesAndDescriptions": "All agents are voters with identical capabilities. Each agent has a private preference strength and can produce a public vote and optionally a reason.",
+                "StateSpec": "Private preference (continuous score from -1 to +1 for option A vs B), private preference strength (weak/strong, randomized), memory of past public votes and reasons seen.",
+                "StateUpdate": "After each voting round, agents may update private preference based on social influence (weighted by reason quality) or conformity pressure. Update rule combines consistency heuristic (if reasons align with private belief) and social proof (if majority favors one option).",
+                "EnvironmentInteraction": "Agents observe the voting interface (options, default highlight, previous votes if public, reasons if shared) and submit a vote."
+            },
+            "Environment": {
+                "Structure": "Non-spatial; agents are connected via a complete network (all see all public information). Voting occurs in a single round or multiple rounds until consensus.",
+                "StateSpec": "Current voting phase, list of public votes cast, list of reasons shared (if applicable), default option setting.",
+                "UpdateRules": "Environment collects votes and reasons, then updates public information for next voter (sequential) or after all votes (simultaneous)."
+            },
+            "Protocol": {
+                "TurnStructure": "Synchronous rounds for simultaneous voting; asynchronous for sequential (random order each trial). Each round: observe, deliberate (LLM call), vote.",
+                "TerminationCondition": "Consensus defined as >80% voting for same option, or after max 3 rounds to limit cost.",
+                "TrialsPerPhase": "50 trials per experimental condition to ensure statistical power.",
+                "DialogueFlow": "In reason-giving conditions, after voting, agent generates a short reason (1 sentence) using LLM; reason is stored and shown to subsequent voters (if sequential) or all after the round (if simultaneous)."
+            },
+            "Rules": {
+                "SharedInformation": "Description of the two options (e.g., 'Call the cat Pyaopyao' vs 'Hyakahyaka'), voting rules, current round, and in public conditions: the aggregated vote tally so far (for sequential) or full results (after round).",
+                "PrivateInformation": "Individual's private preference score and strength, randomly assigned at initialization (biased 55% toward one option to create slight asymmetry).",
+                "PayoffStructure": "No explicit payoff; agents have implicit coordination incentive ('it's good to agree') and consistency incentive ('stay true to your preference').",
+                "ExperimentConditions": [
+                    "Baseline (simultaneous, anonymous, no reasons)",
+                    "Public simultaneous (votes revealed after round)",
+                    "Sequential anonymous (votes visible in order)",
+                    "Sequential public (votes and reasons visible)",
+                    "Default option highlighted",
+                    "Reason-giving only (no vote visibility)"
+                ]
+            },
+            "Logging": {
+                "ContentToRecord": "For each agent per round: private preference score, public vote, reason given (if any), timestamp. For each trial: final consensus outcome, rounds to consensus, rate of preference falsification (disagreement between private preference and public vote).",
+                "LogFormat": "JSON lines with trial ID, condition, agent IDs, and round-wise data.",
+                "AnalysisMetrics": [
+                    "Consensus rate per condition",
+                    "Preference falsification rate (percentage of votes where public choice differs from private preference sign)",
+                    "Magnitude of private preference change from start to end",
+                    "Influence of default option on final share",
+                    "Reason propagation network analysis (which reasons are cited by later agents)"
+                ],
+                "VerificationMethod": "Statistical comparison (ANOVA, t-tests) of consensus rates and falsification rates across conditions. Network analysis of reason cascades. Hypothesis 1: coordination conditions (default, public) show higher consensus than baseline. Hypothesis 2: public/sequential conditions show higher falsification rates. Hypothesis 3: reasons with high frequency in logs indicate focal points."
+            }
+        },
+        "RiskFactorsAndLimitations": [
+            "LLM agents may exhibit biases in reasoning not representative of humans.",
+            "Computational cost of LLM calls per agent per round; need to limit agent count and rounds.",
+            "Simplified preference representation may not capture full complexity of human attitudes.",
+            "The trivial decision framing may not generalize to decisions with slightly higher stakes.",
+            "Network structure is assumed complete; real-world social networks may alter dynamics."
+        ]
+    }
+]
