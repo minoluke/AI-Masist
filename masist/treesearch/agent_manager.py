@@ -123,6 +123,10 @@ class StageTransition:
 class AgentManager:
     def __init__(self, task_desc: str, cfg: Any, workspace_dir: Path):
         self.task_desc = json.loads(task_desc)
+
+        # Normalize perform_ideation.py schema to agent_manager format
+        self._normalize_ideation_schema()
+
         # Key mapping for compatibility (MASIST format -> AI-Scientist-v2 format)
         if "Short Hypothesis" not in self.task_desc and "Hypothesis" in self.task_desc:
             self.task_desc["Short Hypothesis"] = self.task_desc["Hypothesis"]
@@ -180,6 +184,32 @@ class AgentManager:
             f"stage{stage_number}_max_iters",
             self.cfg.agent.steps,
         )
+
+    def _normalize_ideation_schema(self):
+        """
+        Normalize perform_ideation.py nested schema to agent_manager flat format.
+
+        Mapping:
+          - SimulationRequest (entire) → Short Hypothesis (JSON string)
+          - SimulationRequirements (entire) → Experiments (dict)
+          - RiskFactorsAndLimitations → Risk Factors and Limitations
+        """
+        td = self.task_desc
+
+        # SimulationRequest → Short Hypothesis (JSON string)
+        # Contains: Background, Purpose, ResearchQuestions, Hypotheses, RelatedWork
+        if "SimulationRequest" in td and "Short Hypothesis" not in td:
+            sim_req = td["SimulationRequest"]
+            td["Short Hypothesis"] = json.dumps(sim_req, indent=2, ensure_ascii=False)
+
+        # SimulationRequirements → Experiments (dict as-is)
+        # Contains: Agents, Environment, Protocol, Rules, Logging
+        if "SimulationRequirements" in td and "Experiments" not in td:
+            td["Experiments"] = td["SimulationRequirements"]
+
+        # RiskFactorsAndLimitations → Risk Factors and Limitations (key rename)
+        if "RiskFactorsAndLimitations" in td and "Risk Factors and Limitations" not in td:
+            td["Risk Factors and Limitations"] = td["RiskFactorsAndLimitations"]
 
     def _get_task_desc_str(self):
         task_desc = """You are an ambitious AI researcher who is looking to publish a paper that will contribute significantly to the field.
