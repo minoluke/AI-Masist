@@ -29,6 +29,7 @@ def wrap_code(code: str, lang: str = "python") -> str:
     wait_gen=backoff.expo,
     max_value=60,
     factor=1.5,
+    max_tries=5,  # 最大5回リトライ（無限ループ防止）
 )
 def backoff_create(
     create_fn: Callable, retry_exceptions: list[Exception], *args, **kwargs

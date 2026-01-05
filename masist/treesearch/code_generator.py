@@ -27,6 +27,17 @@ class CodeGenerator:
         self.memory_summary = memory_summary
         self.data_preview = None
         self.ag2_reference = self._load_ag2_reference()
+        self.llm_judge_reference = self._load_llm_judge_reference()
+
+    def _load_llm_judge_reference(self) -> str:
+        """Load LLM-as-a-Judge reference document"""
+        doc_path = os.path.join(os.path.dirname(__file__), "..", "docs", "LLM_JUDGE_REFERENCE.md")
+        try:
+            with open(doc_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except FileNotFoundError:
+            logger.warning(f"LLM Judge reference document not found at {doc_path}")
+            return ""
 
     def _load_ag2_reference(self) -> str:
         """Load AG2 quick reference document and replace placeholders with config values"""
@@ -77,10 +88,15 @@ class CodeGenerator:
         }
         prompt["Instructions"] |= self._prompt_impl_guideline
         prompt["Instructions"] |= self._prompt_environment
+        prompt["Instructions"] |= self._prompt_qualitative_metrics_guideline
 
         # AG2リファレンスドキュメントを追加
         if self.ag2_reference:
             prompt["AG2 API Reference"] = self.ag2_reference
+
+        # LLM-as-a-Judgeリファレンスドキュメントを追加
+        if self.llm_judge_reference:
+            prompt["LLM-as-a-Judge Reference"] = self.llm_judge_reference
 
         if self.cfg.agent.data_preview:
             prompt["Data Overview"] = self.data_preview
@@ -111,6 +127,23 @@ class CodeGenerator:
             )
         }
         return env_prompt
+
+    @property
+    def _prompt_qualitative_metrics_guideline(self):
+        return {
+            "Qualitative Metrics Guideline": [
+                "【定性指標の定量化について】",
+                "",
+                "評価指標には以下の3パターンがある：",
+                "  ① 実験中に既に定量化されている指標（例：cooperation_rate = 協力回数/全行動回数）",
+                "  ② 実験中にエージェントに数値を出力させる指標（例：満足度を1-10で回答させる）",
+                "  ③ 定性的なデータを事後的に定量化する指標（例：会話ログから「協調の質」を評価）",
+                "",
+                "①②はそのまま metrics に保存すればよい。",
+                "③のような定性指標は、LLM-as-a-Judge を用いて実験コード内で定量化すること。",
+                "詳細は「LLM-as-a-Judge Reference」セクションを参照。",
+            ]
+        }
 
     @property
     def _prompt_impl_guideline(self):
@@ -283,10 +316,15 @@ class CodeGenerator:
         }
         prompt["Instructions"] |= self._prompt_impl_guideline
         prompt["Instructions"] |= self._prompt_environment
+        prompt["Instructions"] |= self._prompt_qualitative_metrics_guideline
 
         # AG2リファレンスドキュメントを追加
         if self.ag2_reference:
             prompt["AG2 API Reference"] = self.ag2_reference
+
+        # LLM-as-a-Judgeリファレンスドキュメントを追加
+        if self.llm_judge_reference:
+            prompt["LLM-as-a-Judge Reference"] = self.llm_judge_reference
 
         logger.debug("=" * 40)
         logger.debug(f"CodeGenerator: Debugging node {parent_node.id}")
@@ -327,10 +365,15 @@ class CodeGenerator:
 
         prompt["Instructions"] |= self._prompt_resp_fmt
         prompt["Instructions"] |= self._prompt_impl_guideline
+        prompt["Instructions"] |= self._prompt_qualitative_metrics_guideline
 
         # AG2リファレンスドキュメントを追加
         if self.ag2_reference:
             prompt["AG2 API Reference"] = self.ag2_reference
+
+        # LLM-as-a-Judgeリファレンスドキュメントを追加
+        if self.llm_judge_reference:
+            prompt["LLM-as-a-Judge Reference"] = self.llm_judge_reference
 
         logger.debug("=" * 40)
         logger.debug(f"CodeGenerator: Improving node {parent_node.id}")

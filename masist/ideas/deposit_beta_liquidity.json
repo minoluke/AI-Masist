@@ -1,0 +1,116 @@
+{
+  "Name": "jp_deposit_beta_htm_liquidity_boundary_abm_min4",
+  "Title": "金利正常化で流動性ストレスが“跳ねる”境界の有無を同定：銀行LLM×非銀行は数式（4条件・18期）",
+  "Abstract": "本研究は、日本の金利正常化局面で「預金金利の追随（預金ベータ）上振れによる預金移動」と「保有債券の含み損・換金制約（売れる資産の少なさ）」が同時に作用するとき、流動性ストレスが急に悪化する“境界（跳び）”が存在するかを、最小条件（4条件）で確認する。シミュレーションは月次18期、各期を(1)銀行の金利提示、(2)預金者セグメントの資金配分更新、(3)銀行の資金繰り調整の3段階で進める。LLMは銀行の意思決定（提示と調整）のみに使用し、預金者・市場・当局は再現性を優先して数式ルールで決定論的に更新する。条件は「預金者の動きやすさ（低/高）」×「銀行の換金余力（高/低）」の2×2=4とし、金利ショックは高で固定する。評価は、資金不足フラグ、強制売却、債券価格下落、含み損拡大の連鎖、ならびに簡易な“金利変動に弱い度合い（価値/利ざやの変化）”を追跡し、単独の変化では起きない不連続な悪化（急増）が発生するかを判定する。",
+  "SimulationRequest": {
+    "Background": "預金金利の追随（預金ベータ）は金利環境や競争で変わり、預金が動きやすくなると資金繰りが不安定化し得る。一方で金利上昇は債券価格下落を通じて含み損を拡大させ、売れる資産が少ないとストレス時に資金を作りにくい。両者が同時に起きると、資産売却→価格下落→含み損拡大→さらに売却、という連鎖が起き得る。",
+    "Purpose": "境界（跳び）が「存在するかどうか」を最小条件で確認し、次段階（境界位置の精密化）に進むべきか判断できる状態にする。",
+    "ResearchQuestions": [
+      "RQ1: 預金者が動きやすい世界で、換金余力が低い銀行は資金不足に“急に”陥るか。",
+      "RQ2: 強制売却が市場価格を押し下げ、他行の含み損・資金繰りにも波及する連鎖が発生するか。",
+      "RQ3: 上記の急変が、4条件のどれでのみ出る（=境界がある）か。"
+    ],
+    "Hypotheses": [
+      "H1: 『預金者の動きやすさ=高』×『換金余力=低』の条件でのみ、資金不足・強制売却・価格下落が不連続に増える（境界がある）。",
+      "H2: 価格下落による含み損拡大が、同じ資産を持つ他行にも波及し、連鎖的な悪化が起きる。"
+    ],
+    "RelatedWork": "預金ベータ（政策金利変化のどれだけが預金金利に転嫁されるか）と、離散選択（ロジット）による配分更新、流動性比率（30日流出に対する現金化資産）や、強制売却が価格を押し下げ波及する火災売り（fire sale）を基礎に、最小構成で境界の有無を検出する。"
+  },
+  "SimulationRequirements": {
+    "Agents": {
+      "Count": "銀行4 + 預金者セグメント9 + 市場1 + 当局1 = 15エージェント",
+      "RolesAndDescriptions": {
+        "Banks": "預金金利提示（普通/定期）と、資金繰り調整（売却・担保化・短期調達）を行う。LLMで意思決定するのは銀行のみ。",
+        "DepositorSegments": "金利差・利便性・移動コスト・不安に応じて、銀行への預金配分（シェア）を更新する（数式・決定論）。",
+        "Market": "強制売却総量に応じて債券価格を更新し、含み損を再計算する（数式・決定論）。",
+        "Authority": "資金不足が一定閾値を超えた場合に、上限付きで流動性供給する（ルール・決定論）。"
+      }
+    },
+    "Environment": {
+      "Structure": "『預金（セグメント→銀行配分）』と『単一の債券市場（価格）』の結合。",
+      "StateSpec": [
+        "政策金利（外生）",
+        "債券価格（内生）",
+        "市場の厚み（売却が価格に効く強さ）",
+        "不安ショック（外生：固定スケジュール）"
+      ],
+      "UpdateRules": "政策金利は高ショックで固定。債券価格は強制売却の関数として更新。不安ショックは期ごとに固定値で与える。"
+    },
+    "Protocol": {
+      "TurnStructure": "月次18期。各期は3ラウンド：R1 提示（銀行LLM）→ R2 配分更新（数式）→ R3 調整（銀行LLM）",
+      "TerminationCondition": "18期終了、または『資金不足が連続K期（例:3）』で早期終了。",
+      "TrialsPerPhase": "各条件につき1回（乱数なしの決定論。ただし銀行LLM出力は固定温度0等で再現性を担保する想定）。",
+      "DialogueFlow": [
+        "Round1: 各銀行が提示金利等を決定（LLM API呼び出し：銀行ごとに1回）",
+        "Round2: 各セグメントが預金配分を更新（数式）",
+        "Round3: 各銀行が売却・調達等を決定（LLM API呼び出し：銀行ごとに1回）",
+        "市場価格と当局介入を更新（数式）"
+      ],
+      "LLMCallPlan": {
+        "LLMAgents": "Banks only",
+        "CallsPerBankPerPeriod": 2,
+        "TotalCalls": "4 banks × 18 periods × 2 calls × 4 conditions = 576 API calls"
+      }
+    },
+    "Rules": {
+      "SharedInformation": [
+        "政策金利",
+        "各銀行の提示金利（普通/定期）",
+        "債券価格",
+        "当局介入の有無（発動後）"
+      ],
+      "PrivateInformation": [
+        "各セグメントの金利反応・移動コスト・デジタル重視度",
+        "各銀行の初期の換金余力（条件でHigh/Low）と保有債券残高"
+      ],
+      "ExperimentConditions": [
+        "C1: Mobility=Low × LiquidityBuffer=High",
+        "C2: Mobility=Low × LiquidityBuffer=Low",
+        "C3: Mobility=High × LiquidityBuffer=High",
+        "C4: Mobility=High × LiquidityBuffer=Low"
+      ],
+      "NonBankDeterministicRules": {
+        "DepositBetaDefinition": "預金ベータβは『預金金利変化 / 政策金利変化』で定義する（観測・記録用）。",
+        "DepositorChoiceModel": {
+          "Utility": "各期t、セグメントsの銀行bに対する効用 U[s,b,t] = α[s]*r_dep[b,t] + δ[s]*Digital[b] - κ[s]*SwitchCost[s,b] - ρ[s]*StressPenalty[b,t]",
+          "ChoiceShare": "p[s,b,t] = exp(U[s,b,t]) / Σ_j exp(U[s,j,t])",
+          "PartialAdjustment": "w[s,b,t+1] = (1 - m[s]) * w[s,b,t] + m[s] * p[s,b,t]",
+          "MobilityKnob": "m[s] を一括スケール：Mobility=Low は m_base×0.5、Mobility=High は m_base×1.5（例）。"
+        },
+        "LiquidityAccounting": {
+          "NetOutflowProxy": "Outflow[b,t] = θ * max(0, Deposit[b,t] - Deposit[b,t+1]) + WholesaleMaturity[b,t]",
+          "LiquidityBuffer": "Buffer[b,t] = Cash[b,t] + HaircutHQLA * HQLA[b,t] + HaircutCollateral * Collateral[b,t]",
+          "LiquidityShortfallFlag": "Shortfall[b,t] = 1 if Buffer[b,t] < Outflow[b,t] else 0"
+        },
+        "MarketPriceImpact": {
+          "ForcedSales": "Q[t] = Σ_b ForcedSale[b,t]",
+          "PriceUpdate": "Price[t+1] = Price[t] * (1 - λ * Q[t] / Depth)",
+          "MarkToMarketLoss": "UnrealizedLoss[b,t+1] を Price[t+1] で再評価して更新"
+        },
+        "AuthorityIntervention": {
+          "Trigger": "Σ_b Shortfall[b,t] ≥ 1 かつ介入上限未到達",
+          "Action": "LiquidityLine[b,t] を不足分の一部まで供給（上限Cap）。供給にはペナルティ金利を付与（コストとして計上）。"
+        }
+      }
+    },
+    "Logging": {
+      "ContentToRecord": [
+        "bank_panel: 期×銀行で、預金残高（普通/定期）、提示金利、預金ベータ（記録用）、流出率、Buffer、Outflow、Shortfall、ForcedSale、短期調達額、債券残高、含み損",
+        "segment_panel: 期×セグメントで、配分w[s,b,t]、選好p[s,b,t]、移動量",
+        "market_panel: 期で、Price[t]、Q[t]、介入額"
+      ],
+      "AnalysisMetrics": [
+        "境界の有無: 4条件のうち『HighMobility×LowBuffer』でのみ Shortfall の頻度/規模が不連続に大きいか",
+        "連鎖の有無: Q[t]↑ → Price[t]↓ → 他行の含み損↑ → ForcedSale↑ が同一ランで観測されるか",
+        "システム悪化: 同時Shortfall行数の最大値、累積ForcedSale"
+      ],
+      "VerificationMethod": "境界があるなら、C4で Shortfall・ForcedSale・Price下落が明確に立ち、C1〜C3では立たない（または大幅に小さい）という『非対称』が出る。"
+    }
+  },
+  "RiskFactorsAndLimitations": [
+    "預金者がセグメント（集団）なので、個別の極端行動（集中取り付け）を表現しにくい。",
+    "市場価格インパクトは単純な線形則で、資産クラス差や買い手制約の複雑さは省略している。",
+    "当局介入はルールで固定しており、政策判断の多様性は表現しない。",
+    "銀行LLMの出力が変わると結果も変わるため、温度0・固定プロンプト・出力制約で再現性を担保する必要がある。"
+  ]
+}

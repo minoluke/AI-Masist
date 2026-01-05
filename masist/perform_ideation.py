@@ -405,6 +405,14 @@ def generate_temp_free_idea(
                             r"```json\s*(.*?)\s*```", arguments_text, re.DOTALL
                         ).group(1)
 
+                    # Remove trailing ``` if present (LLM sometimes adds it after JSON)
+                    arguments_text = re.sub(r'\s*```\s*$', '', arguments_text)
+
+                    # Extract JSON object if there's extra text
+                    json_match = re.search(r'(\{.*\})', arguments_text, re.DOTALL)
+                    if json_match:
+                        arguments_text = json_match.group(1)
+
                     # Process the action and arguments
                     if action in tools_dict:
                         # It's a tool we have defined
@@ -460,8 +468,8 @@ def generate_temp_free_idea(
     # Save ideas
     ideas = [json.loads(idea_str) for idea_str in idea_str_archive]
 
-    with open(idea_fname, "w") as f:
-        json.dump(ideas, f, indent=4)
+    with open(idea_fname, "w", encoding="utf-8") as f:
+        json.dump(ideas, f, indent=4, ensure_ascii=False)
     print(f"Stored {len(ideas)} ideas in {idea_fname}")
     return ideas
 

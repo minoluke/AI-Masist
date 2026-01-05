@@ -561,8 +561,7 @@ This JSON will be automatically parsed, so ensure the format is precise."""
     return references_prompt, False
 
 
-writeup_system_message_template = """You are an ambitious AI researcher who is looking to publish a paper to the "I Can't Believe It's Not Better" (ICBINB) Workshop at ICLR 2025.
-This workshop aims to highlight real-world pitfalls, challenges, and negative or inconclusive results in multi-agent systems and social simulations, encouraging open discussion.
+writeup_system_message_template = """You are an ambitious AI researcher writing a paper for submission to an academic journal.
 You must accurately represent the results of the experiments.
 The main paper is limited to {page_limit} pages in single-column format, not counting references. In general, try to use the available space and include all relevant information.
 DO NOT USE MORE THAN {page_limit} PAGES FOR THE MAIN TEXT.
@@ -570,7 +569,7 @@ MINIMIZE THE USAGE OF ITEMIZE OR ENUMERATE. ONLY USE THEM IF THEY ARE ABSOLUTELY
 Ensure that the tables and figures are correctly placed in a reasonable location and format.
 
 - Do not change the overall style which is mandated by the conference. Keep to the current method of including the references.bib file.
-- Do not change the style file name (iclr2025). The ICBINB workshop uses ICLR's official style files. Keep `\\usepackage{{iclr2025,times}}` exactly as is.
+- Do not change the style file name (iclr2025). Keep `\\usepackage{{iclr2025,times}}` exactly as is.
 - Do not remove the \\graphicspath directive or no figures will be found.
 - Do not add `Acknowledgements` section to the paper.
 
@@ -581,40 +580,49 @@ Here are some tips for each section of the paper:
   - Try to keep it under 2 lines.
 
 - **Abstract**:
-  - Brief summary highlighting the nature of the challenge or pitfall explored.
-  - Concise motivation of why this matters for real-world deployment.
+  - Brief summary highlighting the research question, methodology, and key findings.
+  - Concise motivation of why this matters for the field.
   - This should be one continuous paragraph.
 
 - **Introduction**:
-  - Overview of the issue or challenge being explored.
-  - Clearly state why this problem is important, especially for practical or real-world contexts.
-  - Summarize your contributions or findings: they may include negative results, real-world pitfalls, unexpected behaviors, or partial improvements.
+  - Overview of the research problem being explored.
+  - Clearly state why this problem is important.
+  - Summarize your contributions: (i) validation against existing research and (ii) novel hypotheses verified.
 
 - **Related Work**:
-  - Cite relevant papers or approaches that have tackled similar issues or have encountered similar pitfalls.
+  - Cite relevant papers or approaches that have tackled similar issues.
   - Compare and contrast with your own findings.
+  - Clearly identify the research gap that your study addresses.
 
 - **Background** (optional):
   - Provide necessary technical or domain-specific background if needed.
 
-- **Method / Problem Discussion**:
-  - Detail the problem context or the method if it is relevant to highlight the challenges faced.
-  - If results are not strictly an improvement, discuss partial successes or lessons learned.
+- **Method**:
+  - Detail the simulation design, agent specifications, and experimental conditions.
+  - Clearly describe baseline conditions (for validating consistency with existing research) and novel conditions (for testing new hypotheses).
 
-- **Experiments** (if applicable):
-  - Present results truthfully according to the data you have. Negative, unexpected, or inconclusive findings are valid contributions for this workshop.
-  - Include figures, tables, or real-world examples that illustrate the pitfalls.
+- **Results**:
+  - Present results truthfully according to the data you have.
+  - **IMPORTANT: Structure the Results section to address both objectives:**
+    - **(i) Validation of Consistency with Existing Research**: Compare baseline simulation results with findings from prior literature. Report whether the simulation reproduces known patterns, thresholds, or behaviors. Use quantitative comparisons where possible.
+    - **(ii) Verification of Novel Hypotheses**: Present results from novel experimental conditions. Report effect sizes, statistical significance, and whether hypotheses were supported or refuted.
+  - Include figures, tables, or examples that illustrate the findings.
   - Include up to 4 figures in the main text. All other figures should be in the appendix.
 
+- **Discussion**:
+  - Interpret the results in the context of existing literature.
+  - Discuss implications of novel findings for theory and practice.
+  - Acknowledge limitations and suggest future research directions.
+
 - **Conclusion**:
-  - Summarize the main lessons learned or contributions.
-  - Suggest next steps or future directions, highlighting how these insights can help the community avoid or overcome similar issues.
+  - Summarize the main contributions: validated consistency with prior work AND new insights from novel hypotheses.
+  - Highlight practical implications and next steps.
 
 - **Appendix**:
   - Place for supplementary material that did not fit in the main paper.
   - Add more information and details (hyperparameters, algorithms, etc.) in the supplementary material.
   - Add more plots and tables in the supplementary material. Make sure that this information is not already covered in the main paper.
-  - When checking for duplicate figures, be sure to also review their descriptions to catch cases where different figures convey the same information. For example, one figure might present aggregated training accuracy as a single line plot with a shaded standard deviation (e.g., aggregated_training_accuracy.png), while another (per_seed_training_accuracy.png) shows the same data as three separate line plots.
+  - When checking for duplicate figures, be sure to also review their descriptions to catch cases where different figures convey the same information.
 
 Ensure you are always writing good compilable LaTeX code. Common mistakes that should be fixed include:
 - LaTeX syntax errors (unenclosed math, unmatched braces, etc.).
@@ -678,8 +686,7 @@ with "latex" syntax highlighting, like so:
 
 # === 日本語用プロンプト ===
 
-writeup_system_message_template_ja = """あなたは優秀なAI研究者であり、ICLR 2025の「I Can't Believe It's Not Better」(ICBINB) Workshopに論文を投稿しようとしています。
-このワークショップは、マルチエージェントシステムや社会シミュレーションにおける現実世界の落とし穴、課題、否定的または決定的でない結果を取り上げ、オープンな議論を促進することを目的としています。
+writeup_system_message_template_ja = """あなたは優秀なAI研究者であり、学術ジャーナルに論文を投稿しようとしています。
 実験結果を正確に報告してください。
 
 本文は{page_limit}ページ以内（参考文献を除く）で、シングルカラム形式です。
@@ -701,19 +708,26 @@ writeup_system_message_template_ja = """あなたは優秀なAI研究者であ�
 
 - **タイトル（Title）**: キャッチーで情報量のあるタイトルにしてください。論文の内容がよく分かるものにしてください。2行以内に収めてください。
 
-- **概要（Abstract）**: 探求する課題や落とし穴の性質を簡潔に要約してください。なぜこれが現実世界での展開に重要なのか、簡潔な動機付けを行ってください。1つの連続した段落にしてください。
+- **概要（Abstract）**: 研究課題、方法論、主要な発見を簡潔に要約してください。なぜこの研究が分野にとって重要なのか、簡潔な動機付けを行ってください。1つの連続した段落にしてください。
 
-- **はじめに（Introduction）**: 探求する問題や課題の概要を述べてください。なぜこの問題が重要なのか、特に実用的または現実世界の文脈で明確に述べてください。貢献や発見を要約してください。
+- **はじめに（Introduction）**: 探求する研究問題の概要を述べてください。なぜこの問題が重要なのかを明確に述べてください。貢献を要約してください：(i) 既存研究との整合性の検証、(ii) 新しい仮説の検証。
 
-- **関連研究（Related Work）**: 類似の問題に取り組んだ、または類似の落とし穴に遭遇した関連論文やアプローチを引用してください。自分の発見と比較対照してください。
+- **関連研究（Related Work）**: 類似の問題に取り組んだ関連論文やアプローチを引用してください。自分の発見と比較対照してください。本研究が取り組む研究ギャップを明確に特定してください。
 
 - **背景（Background）**（オプション）: 必要に応じて技術的または専門的な背景を提供してください。
 
-- **手法（Method）/ 問題の議論**: 問題の文脈や、課題を強調するのに関連する手法を詳述してください。結果が厳密な改善でない場合は、部分的な成功や学んだ教訓を議論してください。
+- **手法（Method）**: シミュレーション設計、エージェント仕様、実験条件を詳述してください。ベースライン条件（既存研究との整合性を検証するため）と新規条件（新しい仮説をテストするため）を明確に記述してください。
 
-- **実験（Experiments）**（該当する場合）: 持っているデータに従って結果を正直に提示してください。否定的、予期せぬ、または決定的でない発見は、このワークショップにとって有効な貢献です。落とし穴を示す図、表、または実例を含めてください。本文には最大4つの図を含めてください。その他の図は付録に配置してください。
+- **結果（Results）**: 持っているデータに従って結果を正直に提示してください。
+  - **重要：結果セクションは以下の2つの目的に対応する構造にしてください：**
+    - **(i) 既存研究との整合性の検証**: ベースラインシミュレーション結果を先行文献の知見と比較してください。シミュレーションが既知のパターン、閾値、または行動を再現しているかどうかを報告してください。可能な限り定量的な比較を使用してください。
+    - **(ii) 新しい仮説の検証**: 新規実験条件からの結果を提示してください。効果量、統計的有意性、仮説が支持されたか否かを報告してください。
+  - 発見を示す図、表、または例を含めてください。
+  - 本文には最大4つの図を含めてください。その他の図は付録に配置してください。
 
-- **結論（Conclusion）**: 主な教訓や貢献を要約してください。次のステップや将来の方向性を提案し、これらの洞察がコミュニティが類似の問題を回避または克服するのにどのように役立つかを強調してください。
+- **考察（Discussion）**: 結果を既存文献の文脈で解釈してください。新しい発見が理論と実践に与える意味を議論してください。限界を認め、将来の研究方向を提案してください。
+
+- **結論（Conclusion）**: 主な貢献を要約してください：先行研究との整合性の検証、および新しい仮説からの新しい洞察。実践的な意味と次のステップを強調してください。
 
 - **付録（Appendix）**: 本文に収まらなかった補足資料を配置してください。補足資料にはより多くの情報と詳細（ハイパーパラメータ、アルゴリズムなど）を追加してください。補足資料にはより多くのプロットと表を追加してください。この情報が本文で既にカバーされていないことを確認してください。
 

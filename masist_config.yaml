@@ -61,7 +61,7 @@ agent:
 
   # LLM settings for coding
   code:
-    model: deepseek-chat
+    model: deepseek-reasoner
     temp: 1.0
     max_tokens: 12000
     thinking:

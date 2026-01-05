@@ -31,7 +31,8 @@ def get_ai_client(model: str, max_retries=2) -> openai.OpenAI:
         client = openai.OpenAI(
             api_key=os.environ.get("DEEPSEEK_API_KEY"),
             base_url="https://api.deepseek.com",
-            max_retries=max_retries
+            max_retries=max_retries,
+            timeout=120.0  # 2分でタイムアウト（ハング防止）
         )
     else:
         client = openai.OpenAI(max_retries=max_retries)

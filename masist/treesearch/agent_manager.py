@@ -251,28 +251,27 @@ Your research idea:\n\n
     def _curate_task_desc(self, stage: Stage) -> str:
         task_desc = self._get_task_desc_str()
 
-        if stage.name.startswith("3_"):
-            experiments = self.task_desc.get("Experiments", [])
-            if isinstance(experiments, list) and len(experiments) > 0:
+        # 全Stageで Experiments (SimulationRequirements) を追加
+        experiments = self.task_desc.get("Experiments", {})
+        if experiments:
+            if isinstance(experiments, dict):
+                # SimulationRequirements は dict なので JSON 形式で渡す
+                experiment_str = json.dumps(experiments, indent=2, ensure_ascii=False)
+            elif isinstance(experiments, list) and len(experiments) > 0:
                 if isinstance(experiments[0], str):
                     experiment_str = "\n".join(experiments)
                 elif isinstance(experiments[0], dict):
-                    experiment_str = "\n".join(
-                        [
-                            f"{k}: {v}"
-                            for d in experiments
-                            for k, v in d.items()
-                        ]
-                    )
+                    experiment_str = json.dumps(experiments, indent=2, ensure_ascii=False)
                 else:
                     experiment_str = str(experiments)
-            elif isinstance(experiments, str) and experiments:
+            elif isinstance(experiments, str):
                 experiment_str = experiments
             else:
-                # Empty or missing Experiments - use Short Hypothesis as fallback
-                experiment_str = self.task_desc.get("Short Hypothesis", "No specific experiments defined.")
-            task_desc += "Experiment Plan: " + experiment_str + "\n"
-        elif stage.name.startswith("4_"):
+                experiment_str = str(experiments)
+            task_desc += "Simulation Requirements:\n" + experiment_str + "\n"
+
+        # Stage 4 で Risk Factors and Limitations を追加
+        if stage.name.startswith("4_"):
             if isinstance(self.task_desc["Risk Factors and Limitations"], list):
                 risk_factors_str = "\n".join(
                     self.task_desc["Risk Factors and Limitations"]
